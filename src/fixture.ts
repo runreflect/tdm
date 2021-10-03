@@ -1,18 +1,24 @@
 export interface Fixture {}
 
-export interface FixturePrimaryKeyMapper<T extends Fixture> {
-  isEqual(obj1: T, obj2: T): boolean
+type ForeignRelationMaterializer<TEntityKey, TResolvedKey, TRelatedResource, TValueFromFixture> = {
+  isEqual(existing: TRelatedResource, candidate: TValueFromFixture): boolean,
+  entity: {
+    readAll(id: TEntityKey): Promise<TResolvedKey[]>,
+  },
+  relation: {
+    read(id: TResolvedKey): Promise<TRelatedResource>,
+  },
 }
 
-export interface FixtureExecutor<T extends Fixture> {
-  create(fixture: T): void
-  read(fixture: T): void
-  update(fixture: T): void
-  delete(fixture: T): void
-}
+export abstract class FixtureTransformer<TFixture, TModel extends Fixture> { //TODO Second param should extend Model not Fixture
+  fixtures: TFixture[]
+  
+  constructor(fixtures: TFixture[]) {
+    this.fixtures = fixtures
+  }
 
-export interface FixtureTransformer<T extends Fixture> {
-  fixtures: T[],
-  mapper: FixturePrimaryKeyMapper<T>,
-  executor: FixtureExecutor<T>,
+  abstract isEqual(existing: TModel, candidate: TFixture): boolean
+  //TODO add mapping method?
+
+  abstract relations(): Record<Exclude<keyof TFixture, keyof TModel>, ForeignRelationMaterializer<any, any, any, any>> //TODO better types for materializer
 }
