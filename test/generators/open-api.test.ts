@@ -1,8 +1,10 @@
 import { OpenAPIGenerator } from '../../src/generators/open-api'
 
+const DESTINATION_DIR = 'dist'
+
 test('parses simple types', async () => {
   const generator = new OpenAPIGenerator()
-  const result = await generator.parse('test/resources/openapi/simple-types.yaml')
+  const result = await generator.parse('test/resources/openapi/simple-types.yaml', DESTINATION_DIR)
   const expectedOutput = `import { Fixture } from 'tdm/fixture'
 
 export interface Foo extends Fixture {
@@ -20,7 +22,7 @@ export interface Foo extends Fixture {
 
 test('parse array types', async () => {
   const generator = new OpenAPIGenerator()
-  const result = await generator.parse('test/resources/openapi/arrays.yaml')
+  const result = await generator.parse('test/resources/openapi/arrays.yaml', DESTINATION_DIR)
 
   const bar = `import { Fixture } from 'tdm/fixture'
 
@@ -55,7 +57,7 @@ export interface Foo extends Fixture {
 
 test('parse anyOf type', async () => {
   const generator = new OpenAPIGenerator()
-  const result = await generator.parse('test/resources/openapi/any-of.yaml')
+  const result = await generator.parse('test/resources/openapi/any-of.yaml', DESTINATION_DIR)
   const bar = `import { Fixture } from 'tdm/fixture'
 
 export interface Bar extends Fixture {
@@ -99,7 +101,7 @@ export interface Union extends Fixture {
 // See https://swagger.io/docs/specification/data-models/oneof-anyof-allof-not/ for more information
 test('parse oneOf type', async () => {
   const generator = new OpenAPIGenerator()
-  const result = await generator.parse('test/resources/openapi/one-of.yaml')
+  const result = await generator.parse('test/resources/openapi/one-of.yaml', DESTINATION_DIR)
   const bar = `import { Fixture } from 'tdm/fixture'
 
 export interface Bar extends Fixture {
@@ -140,7 +142,7 @@ export interface Union extends Fixture {
 
 test('parse allOf type', async () => {
   const generator = new OpenAPIGenerator()
-  const result = await generator.parse('test/resources/openapi/all-of.yaml')
+  const result = await generator.parse('test/resources/openapi/all-of.yaml', DESTINATION_DIR)
   const bar = `import { Fixture } from 'tdm/fixture'
 
 export interface Bar extends Fixture {
@@ -162,8 +164,7 @@ export interface Union extends Fixture {
     c?: Foo & Bar;
 }
 `
-  const baz = `import { Fixture } from 'tdm/fixture'
-import { PaginationOptions } from './PaginationOptions'
+  const baz = `import { PaginationOptions } from './PaginationOptions'
 import { Bar } from './Bar'
 
 export type Baz = PaginationOptions & { 'data': Bar[] };
@@ -202,7 +203,7 @@ export interface PaginationOptions extends Fixture {
 
 test('parses optional vs required fields', async () => {
   const generator = new OpenAPIGenerator()
-  const result = await generator.parse('test/resources/openapi/required.yaml')
+  const result = await generator.parse('test/resources/openapi/required.yaml', DESTINATION_DIR)
 
   const foo = `import { Fixture } from 'tdm/fixture'
 
@@ -220,7 +221,7 @@ export interface Foo extends Fixture {
 
 test('parses enums', async () => {
   const generator = new OpenAPIGenerator()
-  const result = await generator.parse('test/resources/openapi/enums.yaml')
+  const result = await generator.parse('test/resources/openapi/enums.yaml', DESTINATION_DIR)
 
   const foo = `import { Fixture } from 'tdm/fixture'
 
@@ -237,7 +238,7 @@ export interface Foo extends Fixture {
 
 test('parse self-referential schemas', async () => {
   const generator = new OpenAPIGenerator()
-  const result = await generator.parse('test/resources/openapi/self-refential.yaml')
+  const result = await generator.parse('test/resources/openapi/self-refential.yaml', DESTINATION_DIR)
 
   const foo = `import { Fixture } from 'tdm/fixture'
 
@@ -255,7 +256,7 @@ export interface Foo extends Fixture {
 
 test('parse object type without $ref', async () => {
   const generator = new OpenAPIGenerator()
-  const result = await generator.parse('test/resources/openapi/object.yaml')
+  const result = await generator.parse('test/resources/openapi/object.yaml', DESTINATION_DIR)
 
   const foo = `import { Fixture } from 'tdm/fixture'
 

@@ -11,7 +11,7 @@ npm install
 Build the project
 
 ```
-tsc --project tsconfig.json
+npm run build
 ```
 
 Generate Fixture definition files

@@ -4,13 +4,19 @@ import { JSDocStructure, OptionalKind, Project, PropertySignatureStructure, Type
 import { toTitleCase } from '../utils'
 import { OpenAPI, OpenAPIV3, OpenAPIV3_1 } from "openapi-types"
 import { TypeGenerator } from './open-api/type-generator'
+import fs from 'fs'
 
-const DEFAULT_IMPORT = "import { Fixture } from 'tdm/fixture'"
+const DEFAULT_INTERFACE_IMPORT = "import { Fixture } from 'tdm/fixture'"
 
 export class OpenAPIGenerator implements Generator {
 
-  async parse(filename: string): Promise<GeneratedFile[] | undefined> {
-    const result = await SwaggerParser.parse(filename)
+  async parse(source: string, destinationDir: string): Promise<GeneratedFile[] | undefined> {
+    const result = await SwaggerParser.parse(source)
+
+    // Verify destination exists and is a directory
+    if (!fs.existsSync(destinationDir) || !fs.statSync(destinationDir).isDirectory()) {
+      throw new Error(`Destination is not a valid directory: ${destinationDir}`)
+    }
 
     if (!isOpenAPIV3(result)) {
       console.warn('Unable to parse OpenAPI document that is not v3.0 or above')
@@ -18,7 +24,6 @@ export class OpenAPIGenerator implements Generator {
     }
 
     const project = new Project({})
-
     const schemas = result.components?.schemas
 
     if (!schemas) {
@@ -34,7 +39,7 @@ export class OpenAPIGenerator implements Generator {
         const { type, references } = new TypeGenerator().generate(value)
         const importsString = generateImports(key, references)
         
-        const sourceFile = project.createSourceFile(`dist/${key}.ts`, importsString, { overwrite: true })
+        const sourceFile = project.createSourceFile(`${destinationDir}/${key}.ts`, importsString, { overwrite: true })
 
         sourceFile.addTypeAlias({
           name: interfaceName,
@@ -44,9 +49,9 @@ export class OpenAPIGenerator implements Generator {
         })
       } else {
         const { properties, references } = this.generateProperties(value) || { properties: undefined, references: new Set<string>() }
-        const importsString = generateImports(key, references)
+        const importsString = generateImports(key, references, DEFAULT_INTERFACE_IMPORT)
 
-        const sourceFile = project.createSourceFile(`dist/${key}.ts`, importsString, { overwrite: true })
+        const sourceFile = project.createSourceFile(`${destinationDir}/${key}.ts`, importsString, { overwrite: true })
 
         sourceFile.addInterface({
           name: interfaceName,
@@ -111,8 +116,8 @@ function generateComment(title: string | undefined): OptionalKind<JSDocStructure
   }
 }
 
-function generateImports(clazz: string, references: Set<string>) {
-  let importsString = DEFAULT_IMPORT + "\n"
+function generateImports(clazz: string, references: Set<string>, defaultImports?: string) {
+  let importsString = !!defaultImports ? defaultImports + '\n' : ''
 
   Array.from(references).
     filter(reference => reference !== clazz). // remove self-references

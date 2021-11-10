@@ -91,7 +91,6 @@ export class TypeGenerator {
   private allOf(property: any): string {
     // @ts-ignore
     const unionInterfaces = property['allOf'].map(childProperty => {
-      console.log('allof property', childProperty)
       return this.generateType(childProperty)
     })
 

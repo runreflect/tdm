@@ -1,35 +1,60 @@
 import { Differ } from "../src/differ"
 
-interface Example {
+interface ExampleEntity {
   foo: string,
 }
 
-test('no match', () => {
-  const differ = new Differ<Example>()
+interface ExampleFixture {
+  nested: {
+    foo: string,
+  }
+}
 
-  const existing = [{ foo: 'bar' }]
-  const expected = [{ foo: 'baz' }]
+test('no match on primary entity', () => {
+  const differ = new Differ<ExampleEntity, ExampleFixture>()
+
+  const existing = { foo: 'bar' }
+  const expected = {
+    nested: { foo: 'baz' }
+  }
+
+  function isEqual(obj1: ExampleEntity, obj2: ExampleFixture) {
+    return obj1.foo === obj2.nested.foo
+  }
 
   expect(
-    differ.diff(existing, expected)
+    differ.diff([existing], [expected], isEqual)
   ).toEqual({
     noop: [],
     modify: [],
-    create: expected,
-    delete: existing,
+    create: [{
+      fixture: expected,
+    }],
+    delete: [{
+      model: existing,
+    }],
   })
 })
 
-test('match', () => {
-  const differ = new Differ<Example>()
+test('matching on primary entity', () => {
+  const differ = new Differ<ExampleEntity, ExampleFixture>()
 
-  const existing = [{ foo: 'bar' }]
-  const expected = [{ foo: 'bar' }] // Use separate variable to test that it isn't comparing based on object reference
+  const existing = { foo: 'bar' }
+  const expected = {
+    nested: { foo: 'bar' }
+  }
+
+  function isEqual(obj1: ExampleEntity, obj2: ExampleFixture) {
+    return obj1.foo === obj2.nested.foo
+  }
 
   expect(
-    differ.diff(existing, expected)
+    differ.diff([existing], [expected], isEqual)
   ).toEqual({
-    noop: existing,
+    noop: [{
+      fixture: expected,
+      model: existing,
+    }],
     modify: [],
     create: [],
     delete: [],

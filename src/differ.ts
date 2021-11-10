@@ -1,48 +1,58 @@
-import difference from 'lodash/difference'
-import intersection from 'lodash/intersection'
-import md5 from 'md5'
+import clone from 'lodash/clone'
 
-export interface DiffResults<T> {
-  noop: Array<T | undefined>, //TODO fix these
-  modify: Array<T | undefined>,
-  create: Array<T | undefined>,
-  delete: Array<T | undefined>,
+export interface DiffResults<TModel, TFixture> {
+  noop: { model: TModel, fixture: TFixture }[],
+  modify: { model: TModel, fixture: TFixture }[],
+  create: { fixture: TFixture }[],
+  delete: { model: TModel }[],
 }
 
-export class Differ<T> {
-  diff(objs1: T[], objs2: T[]): DiffResults<T> { //TODO Add 'isFullDataUpdate'
+export class Differ<TModel, TFixture> {
+  diff(existing: TModel[], candidates: TFixture[], isEqual: (model: any, fixture: any) => boolean): DiffResults<TModel, TFixture> { //TODO Add 'isFullDataUpdate' and handle isEqual
 
-    // Get matching id / generate hashcode for each object
-    const objs1Map = new Map<string | number[], T>()
-    const objs2Map = new Map<string | number[], T>()
-    
-    objs1.forEach(obj => {
-      objs1Map.set(hashcodeOrMatchingId(obj), obj)
+    const noop: { model: TModel, fixture: TFixture }[] = []
+    const toModify: { model: TModel, fixture: TFixture }[] = []
+    const toCreate: { fixture: TFixture }[] = []
+    const toDelete: { model: TModel }[] = []
+
+    const existingObjs = clone(existing)
+    const candidateObjs = clone(candidates)
+
+    for (let i = 0; i < existingObjs.length; i++) {
+      const existingObj = existingObjs[i]
+      let foundCandidate: TFixture | null = null
+
+      for (let j = 0; j < candidateObjs.length; j++) {
+        const candidateObj = candidateObjs[j]
+
+        if (candidateObj === undefined) { // Will happen if we've deleted all elements in the array
+          break
+        }
+
+        if (isEqual(existingObj, candidateObj)) { //TODO this doesn't need to be a class method...
+          //TODO handle 'modify' case here by calling 'mapping' method
+          foundCandidate = candidateObj
+          delete candidateObjs[j]
+          break
+        }
+      }
+
+      if (foundCandidate) {
+        noop.push({ fixture: foundCandidate, model: existingObj })
+      } else {
+        toDelete.push({ model: existingObj })
+      }
+    }
+
+    candidateObjs.filter(obj => obj != undefined).forEach(candidateObj => {
+      toCreate.push({ fixture: candidateObj })
     })
 
-    objs2.forEach(obj => {
-      objs2Map.set(hashcodeOrMatchingId(obj), obj)
-    })
-
-    const objs1Keys = Array.from(objs1Map.keys())
-    const objs2Keys = Array.from(objs2Map.keys())
-
-    //TODO this may actually be slower than a simpler approach...
-    const noopOrModify = intersection(objs1Keys, objs2Keys) //TODO Things that exist should either be no-op or modified
-    const toDelete = difference(objs1Keys, objs2Keys) //TODO Things in objs1 but not objs2 should be deleted
-    const toCreate = difference(objs2Keys, objs1Keys) //TODO Things in objs2 but not objs1 should be created
-    
     return {
-      noop: noopOrModify.map(key => objs1Map.get(key)),
+      noop: noop,
       modify: [], //TODO populate this
-      create: toCreate.map(key => objs2Map.get(key)),
-      delete: toDelete.map(key => objs1Map.get(key)),
+      create: toCreate,
+      delete: toDelete,
     }
   }
-}
-
-function hashcodeOrMatchingId<T>(obj: T): string | number[] {
-  const thing = JSON.stringify(obj)
-
-  return md5(thing)
 }
