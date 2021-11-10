@@ -1,0 +1,128 @@
+import { Generator, GeneratedFile } from '../generator'
+import SwaggerParser from '@apidevtools/swagger-parser'
+import { JSDocStructure, OptionalKind, Project, PropertySignatureStructure, Type } from 'ts-morph'
+import { toTitleCase } from '../utils'
+import { OpenAPI, OpenAPIV3, OpenAPIV3_1 } from "openapi-types"
+import { TypeGenerator } from './open-api/type-generator'
+
+const DEFAULT_IMPORT = "import { Fixture } from 'tdm/fixture'"
+
+export class OpenAPIGenerator implements Generator {
+
+  async parse(filename: string): Promise<GeneratedFile[] | undefined> {
+    const result = await SwaggerParser.parse(filename)
+
+    if (!isOpenAPIV3(result)) {
+      console.warn('Unable to parse OpenAPI document that is not v3.0 or above')
+      return undefined
+    }
+
+    const project = new Project({})
+
+    const schemas = result.components?.schemas
+
+    if (!schemas) {
+      console.warn('No schemas defined in OpenAPI document. Exiting.')
+      return undefined
+    }
+
+    for (const [key, value] of Object.entries(schemas)) {
+      const interfaceName = toTitleCase(key)
+      const title = value['title']
+
+      if (('type' in value && value['type'] === 'array') || 'allOf' in value || 'anyOf' in value || 'oneOf' in value) {
+        const { type, references } = new TypeGenerator().generate(value)
+        const importsString = generateImports(key, references)
+        
+        const sourceFile = project.createSourceFile(`dist/${key}.ts`, importsString, { overwrite: true })
+
+        sourceFile.addTypeAlias({
+          name: interfaceName,
+          isExported: true,
+          type,
+          docs: generateComment(title),
+        })
+      } else {
+        const { properties, references } = this.generateProperties(value) || { properties: undefined, references: new Set<string>() }
+        const importsString = generateImports(key, references)
+
+        const sourceFile = project.createSourceFile(`dist/${key}.ts`, importsString, { overwrite: true })
+
+        sourceFile.addInterface({
+          name: interfaceName,
+          isExported: true,
+          properties,
+          extends: ['Fixture'],
+          docs: generateComment(title),
+        })
+      }
+    }
+
+    await project.save()
+
+    return project.getSourceFiles().map(sourceFile => {
+      return {
+        source: sourceFile.getFullText(),
+        filename: sourceFile.getBaseName(),
+      }
+    })
+  }
+
+  private generateProperties(value: any): { properties: OptionalKind<PropertySignatureStructure>[], references: Set<string> } | undefined {
+    // Defines which properties should be marked required vs. optional
+    const required = new Set(value['required'])
+
+    let allReferences = new Set<string>()
+
+    if ('properties' in value) {
+      const keys = Object.entries(value['properties'])
+
+      const properties = keys.map(t => {
+        const name = t[0] + (required.has(t[0]) ? '' : '?')
+
+        const property = t[1] as any
+
+        const docs = ('description' in property) ? generateComment(property['description']) : undefined
+
+        const { type, references } = new TypeGenerator().generate(property)
+
+        references.forEach(allReferences.add, allReferences) // Combine both sets
+
+        return {
+          docs,
+          name,
+          type,
+        }
+      })
+
+      return {
+        properties,
+        references: allReferences,
+      }
+    }
+  }
+}
+
+function generateComment(title: string | undefined): OptionalKind<JSDocStructure>[] | undefined {
+  if (title && title.trim().length > 0) {
+    return [{
+      description: title.trim(),
+    }]
+  }
+}
+
+function generateImports(clazz: string, references: Set<string>) {
+  let importsString = DEFAULT_IMPORT + "\n"
+
+  Array.from(references).
+    filter(reference => reference !== clazz). // remove self-references
+    forEach(reference => {
+      importsString += `import { ${reference} } from './${reference}'\n`
+    })
+
+  return importsString
+}
+
+function isOpenAPIV3(value: OpenAPI.Document): value is OpenAPIV3.Document | OpenAPIV3_1.Document {
+  return value.hasOwnProperty('components')
+}

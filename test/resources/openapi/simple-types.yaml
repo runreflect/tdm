@@ -1,0 +1,23 @@
+openapi: 3.0.0
+info:
+  title: Sample API
+  version: 1.0.0
+paths:
+  /example:
+    get:
+      summary: Example
+      responses:
+          '200':
+            description: OK
+components:
+  schemas:
+    Foo:
+      properties:
+        a:
+          type: string
+        b:
+          type: number
+        c:
+          type: integer
+        d:
+          type: boolean
