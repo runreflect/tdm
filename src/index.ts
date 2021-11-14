@@ -17,11 +17,4 @@ program.
     }
   })
 
-program.
-  command('run').
-  description('Runs the TDM framework').
-  action(() => {
-    console.log("TODO") // TODO implement this
-  })
-
 program.parse(process.argv)
