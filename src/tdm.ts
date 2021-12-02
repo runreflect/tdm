@@ -1,55 +1,168 @@
-import { Differ } from './differ'
-import { Fixture, FixtureTransformer } from './fixture'
+import { Differ, DiffResults } from './differ'
+import { Fixture, FixtureTransformer, IFixture } from './fixture'
 import { Executor } from './executor'
 
 export class TDM {
-  items: Array<{ transformer: FixtureTransformer<any, Fixture>, fixtures: any[], executor: Executor<any> }> //TODO can we get more specific typing here?
+  items: Array<{ name: string, transformer: FixtureTransformer<any, any, any>, fixtures: any[], executor: Executor<any> }> //TODO can we get more specific typing here?
 
   constructor() {
     this.items = []
   }
 
-  add<TTransformer extends FixtureTransformer<TFixture, TModel>, TExecutor extends Executor<TModel>, TFixture, TModel extends Fixture>(transformer: TTransformer, executor: TExecutor): void {
-    this.items.push({ transformer: transformer, fixtures: transformer.fixtures, executor: executor })
+  /**
+   * Add a set of fixtures to be managed by TDM.
+   */
+  add<
+    TExecutor extends Executor<TEntity>,
+    TFixture extends IFixture,
+    TEntity,
+    TPrimaryKey extends keyof TEntity
+  >(name: string, transformer: FixtureTransformer<TFixture, TEntity, TPrimaryKey>, executor: TExecutor): void {
+    this.items.push({ name, transformer, fixtures: transformer.fixtures, executor })
   }
 
-  async run(): Promise<void> {
-    this.items.forEach(async ({ transformer, fixtures, executor }) => {
-      try {
-        console.log(`Processing fixtures for transformer: ${transformer.constructor.name}. Num fixtures: ${fixtures.length}`)
+  /**
+   * Run the diffing logic and optionally execute the required changes to get the data sources into their
+   * expected state.
+   */
+  async run(options: { dryRun: boolean }): Promise<Record<string, DiffResults<object, object, never>>> {
+    const aggregatedResults: Record<string, DiffResults<object, object, never>> = {} //TODO better type
 
-        const existing = await executor.readCollection()
-        const diffResults = new Differ().diff(existing, fixtures as Fixture[], transformer.isEqual)
-  
-        //TODO for now we'll only create relations for existing things
-        diffResults.noop.forEach(({ model, fixture }) => {
-          //TODO relations should be queried after all the main entities have been updated, so this should include handling created and modified entities and also removing relations prior to a delete
-          Object.keys(transformer.relations).forEach(async relation => {
-            const relationTransformer = transformer.relations()[relation]
-            //@ts-ignore
-            const relationFixtures = fixture[relation]
+    const allCollections = await this.retrieveRelatedCollections()
 
-            try {
-              const xrefEntities = await relationTransformer.entity.readAll(model)
-              const foreignEntities = await Promise.all(xrefEntities.map(async xrefEntity => {
-                try {
-                  const realEntity = await relationTransformer.relation.read(xrefEntity)
+    await Promise.all(this.items.map(async ({ name, transformer, fixtures, executor }) => {
+      const existing = await executor.readCollection()
+      console.log(`Processing fixtures for transformer: ${transformer.constructor.name}. Num fixtures: ${fixtures.length}`)
 
-                  return realEntity
-                } catch (e) {
-                  console.error(`Error on 2nd relation call ${JSON.stringify(xrefEntity)}`, e)
-                }
-              }))
+      const candidates = fixtures.map(fixture => {
+        const relations = this.retrieveRelationsFunc(name, allCollections)(fixture)
+        return { fixture, relations }
+      })
 
-              const relationDiffResults = new Differ().diff(foreignEntities, relationFixtures, relationTransformer.isEqual)
-            } catch (e) {
-              console.error('Error on 1st relation call', e)
-            }
-          })
-        })
-      } catch (e) {
-        console.error('error', e)
+      const diffResults = new Differ().diff({
+        existing,
+        //@ts-ignore
+        candidates,
+        //@ts-ignore
+        primaryKey: transformer.primaryKey(),
+        isMatchesEntity: transformer.isMatchesEntity,
+        mapping: transformer.mapping
+      })
+
+      if (!options.dryRun) {
+        console.log(`Creating ${diffResults.create.length} entities`, diffResults.create)
+        await Promise.all(diffResults.create.map(async item => {
+          try {
+            return await executor.create(item.entityToCreate)
+          } catch (e) {
+            console.error("Error when creating entity", item.entityToCreate, e)
+            throw e
+          }
+        }))
+
+        console.log(`Modifying ${diffResults.modify.length} entities`)
+        await Promise.all(diffResults.modify.map(async item => {
+          try {
+            return await executor.update(item.updatedEntity)
+          } catch (e) {
+            console.error("Error when modifying entity", item.updatedEntity, e)
+            throw e
+          }
+        }))
+
+        console.log(`Deleting ${diffResults.delete.length} entities`)
+        await Promise.all(diffResults.delete.map(async item => {
+          try {
+            return await executor.delete(item.entity)
+          } catch (e) {
+            console.error("Error when deleting entity", item.entity, e)
+            throw e
+          }
+        }))
       }
-    })
+
+      aggregatedResults[name] = diffResults
+    }))
+
+    return aggregatedResults
   }
+
+  /**
+   * Materialize all data associated with relations inside the fixtures that we're managing.
+   */
+  private async retrieveRelatedCollections(): Promise<Map<string, any[]>> {
+    const allCollections = new Map<string, any[]>() //TODO better type
+
+    await Promise.all(this.items.map(async item => {
+      console.log(`Retrieving all results for relation: ${item.name}`)
+
+      const results = await item.executor.readCollection()
+      allCollections.set(item.name, results)
+    }))
+
+    return allCollections
+  }
+
+  private combineFixtureAndRelations(zipped: [fixture: any, relations: Record<string, any> | undefined]): { fixture: object, relations: object } {
+    const relations = zipped[1] || {}
+
+    return {
+      fixture: zipped[0],
+      relations,
+    }
+  }
+
+  private retrieveRelationsFunc(name: string, allCollections: Map<string, any[]>) {
+    const items = this.items
+    const item = items.find(item => item.name === name)
+
+    if (!item) {
+      throw new Error(`Unable to link relation. No transformer has been added with name ${name}`)
+    }
+
+    function traverseForRelations(obj: object | any[]): object {
+      if (!item) {
+        throw new Error(`Unable to link relation. No transformer has been added with name ${name}`)
+      }
+
+      const result: Record<string, any> = {}
+
+      if (hasOwnProperty(obj, Fixture.References)) {
+        const relations = obj[Fixture.References] as object
+    
+        Object.keys(relations).forEach(relationName => {
+          //@ts-ignore
+          const toCompare = obj[Fixture.References][relationName] as any
+          const transformer = items.find(item => item.name === relationName)?.transformer
+    
+          const collection = allCollections.get(relationName) || []
+          const match = collection.find(collectionEntity => transformer && transformer.isMatchesEntity(collectionEntity, toCompare))
+
+          if (!match) {
+            throw new Error(`No entity matches the fixture reference '${relationName}' with value '${JSON.stringify(toCompare)}'`)
+          }
+          //@ts-ignore
+          result[relationName] = match
+        })
+      }
+
+      for (const [key, value] of Object.entries(obj)) {
+        if (Array.isArray(value)) {
+          result[key] = value.map(valueItem => traverseForRelations(valueItem))
+        } else if (typeof value === 'object') { // object
+          result[key] = traverseForRelations(value)
+        }
+      }
+    
+      return result
+    }
+
+    return function(fixture: any) {
+      return traverseForRelations(fixture)
+    }
+  }
+}
+
+function hasOwnProperty<X extends {}, Y extends PropertyKey>(obj: X, prop: Y): obj is X & Record<Y, unknown> {
+  return obj.hasOwnProperty(prop)
 }
