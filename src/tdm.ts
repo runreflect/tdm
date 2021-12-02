@@ -103,15 +103,6 @@ export class TDM {
     return allCollections
   }
 
-  private combineFixtureAndRelations(zipped: [fixture: any, relations: Record<string, any> | undefined]): { fixture: object, relations: object } {
-    const relations = zipped[1] || {}
-
-    return {
-      fixture: zipped[0],
-      relations,
-    }
-  }
-
   private retrieveRelationsFunc(name: string, allCollections: Map<string, any[]>) {
     const items = this.items
     const item = items.find(item => item.name === name)
