@@ -1,5 +1,5 @@
 import { Differ, DiffResults } from './differ'
-import { Fixture, FixtureTransformer, IFixture } from './fixture'
+import { Fixture, FixtureTransformer } from './fixture'
 import { Executor } from './executor'
 
 export class TDM {
@@ -14,7 +14,7 @@ export class TDM {
    */
   add<
     TExecutor extends Executor<TEntity>,
-    TFixture extends IFixture,
+    TFixture,
     TEntity,
     TPrimaryKey extends keyof TEntity
   >(name: string, transformer: FixtureTransformer<TFixture, TEntity, TPrimaryKey>, executor: TExecutor): void {
@@ -31,7 +31,11 @@ export class TDM {
     const allCollections = await this.retrieveRelatedCollections()
 
     await Promise.all(this.items.map(async ({ name, transformer, fixtures, executor }) => {
-      const existing = await executor.readCollection()
+      const existing = allCollections.get(name)
+
+      if (!existing) {
+        throw new Error(`No collection exists for collection name: ${name}`)
+      }
       console.log(`Processing fixtures for transformer: ${transformer.constructor.name}. Num fixtures: ${fixtures.length}`)
 
       const candidates = fixtures.map(fixture => {
@@ -53,7 +57,12 @@ export class TDM {
         console.log(`Creating ${diffResults.create.length} entities`, diffResults.create)
         await Promise.all(diffResults.create.map(async item => {
           try {
-            return await executor.create(item.entityToCreate)
+            if (item.entityToCreate) {
+              return await executor.create(item.entityToCreate)
+            } else {
+              console.error('Cannot create entity as it is undefined', item)
+              throw new Error('Cannot create entity as it is undefined')
+            }
           } catch (e) {
             console.error("Error when creating entity", item.entityToCreate, e)
             throw e
@@ -130,7 +139,7 @@ export class TDM {
           const match = collection.find(collectionEntity => transformer && transformer.isMatchesEntity(collectionEntity, toCompare))
 
           if (!match) {
-            throw new Error(`No entity matches the fixture reference '${relationName}' with value '${JSON.stringify(toCompare)}'`)
+            console.debug(`No entity matches the fixture reference '${relationName}' with value '${JSON.stringify(toCompare)}'`)
           }
           //@ts-ignore
           result[relationName] = match

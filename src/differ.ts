@@ -5,10 +5,10 @@ import omit from 'lodash/omit'
 import omitBy from 'lodash/omitBy'
 
 export interface DiffResults<TEntity extends object, TFixture extends object, TPrimaryKey extends keyof TEntity> {
-  noop: { entity: TEntity, fixture: TFixture }[],
-  modify: { entity: TEntity, fixture: TFixture, updatedEntity: TEntity }[],
-  create: { entityToCreate: Omit<TEntity, TPrimaryKey>, fixture: TFixture }[],
-  delete: { entity: TEntity }[],
+  noop: { entity: TEntity, fixture: TFixture, error?: string }[],
+  modify: { entity: TEntity, fixture: TFixture, updatedEntity?: TEntity, error?: string }[],
+  create: { fixture: TFixture, entityToCreate?: Omit<TEntity, TPrimaryKey> | undefined, error?: string }[],
+  delete: { entity: TEntity, error?: string }[],
 }
 
 export class Differ<TEntity extends object, TFixture extends object, TPrimaryKey extends keyof TEntity> {
@@ -19,9 +19,10 @@ export class Differ<TEntity extends object, TFixture extends object, TPrimaryKey
     isMatchesEntity: (entity: TEntity, fixture: TFixture) => boolean,
     mapping: (fixture: TFixture, relations?: object) => Omit<TEntity, TPrimaryKey>,
   }): DiffResults<TEntity, TFixture, TPrimaryKey> { //TODO Add 'isFullDataUpdate'
+    try {
     const noop: { entity: TEntity, fixture: TFixture }[] = []
-    const toModify: { entity: TEntity, fixture: TFixture, updatedEntity: TEntity }[] = []
-    const toCreate: { fixture: TFixture, entityToCreate: Omit<TEntity, TPrimaryKey> }[] = []
+    const toModify: { entity: TEntity, fixture: TFixture, updatedEntity?: TEntity, error?: string }[] = []
+    const toCreate: { fixture: TFixture, entityToCreate?: Omit<TEntity, TPrimaryKey>, error?: string }[] = []
     const toDelete: { entity: TEntity }[] = []
 
     const existingEntities = clone(options.existing)
@@ -29,8 +30,8 @@ export class Differ<TEntity extends object, TFixture extends object, TPrimaryKey
 
     for (let i = 0; i < existingEntities.length; i++) {
       const existingEntity = existingEntities[i]
-      let haveModifiedEntity: { candidate: TFixture, updatedEntity: TEntity } | null = null
-      let foundEqualCandidate: TFixture | null = null
+      let haveModifiedEntity: { candidate: TFixture, updatedEntity?: TEntity, error?: string } | undefined
+      let foundEqualCandidate: TFixture | undefined
 
       for (let j = 0; j < candidates.length; j++) {
         const candidate = candidates[j]
@@ -41,9 +42,22 @@ export class Differ<TEntity extends object, TFixture extends object, TPrimaryKey
 
         if (options.isMatchesEntity(existingEntity, candidate.fixture)) {
           const existingEntityWithoutPrimaryKey = omit(existingEntity, [options.primaryKey])
-          const candidateMappedToEntity = options.mapping(candidate.fixture, candidate.relations)
+          let candidateMappedToEntity: Omit<TEntity, TPrimaryKey> | undefined
+          let error: string | undefined
 
-          if (isSharedKeysHaveSameValues(candidateMappedToEntity, existingEntityWithoutPrimaryKey)) {
+          try {
+            candidateMappedToEntity = options.mapping(candidate.fixture, candidate.relations)
+          } catch (e: any) {
+            console.debug('Error when mapping entity', e)
+            error = e?.message
+          }
+
+          if (!candidateMappedToEntity) {
+            haveModifiedEntity = {
+              candidate: candidate.fixture,
+              error: error ?? 'Unknown error',
+            }
+          } else if (isSharedKeysHaveSameValues(candidateMappedToEntity, existingEntityWithoutPrimaryKey)) {
             foundEqualCandidate = candidate.fixture
           } else {
             let updatedEntity = candidateMappedToEntity as TEntity
@@ -70,7 +84,15 @@ export class Differ<TEntity extends object, TFixture extends object, TPrimaryKey
     }
 
     candidates.filter(obj => obj != undefined).forEach(candidate => {
-      toCreate.push({ fixture: candidate.fixture, entityToCreate: options.mapping(candidate.fixture, candidate.relations) })
+      let entityToCreate: Omit<TEntity, TPrimaryKey> | undefined
+      
+      try {
+        entityToCreate = options.mapping(candidate.fixture, candidate.relations)
+        toCreate.push({ fixture: candidate.fixture, entityToCreate })
+      } catch (e: any) {
+        console.debug('Error when mapping entity', e)
+        toCreate.push({ fixture: candidate.fixture, error: e?.message ?? 'Unknown error' })
+      }
     })
 
     return {
@@ -79,6 +101,10 @@ export class Differ<TEntity extends object, TFixture extends object, TPrimaryKey
       create: toCreate,
       delete: toDelete,
     }
+  } catch (e) {
+    console.error("Differ error", e)
+    throw e
+  }
   }
 }
 

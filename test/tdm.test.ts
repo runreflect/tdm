@@ -1,5 +1,5 @@
 import { Executor } from '../src/executor'
-import { Fixture, FixtureTransformer, IFixture } from '../src/fixture'
+import { Fixture, FixtureTransformer } from '../src/fixture'
 import { TDM } from '../src/tdm'
 
 interface SimpleFixture {
@@ -12,6 +12,19 @@ interface SimpleEntity {
   id: number,
   name: string,
   description?: string,
+}
+
+interface OtherFixture {
+  name: string,
+  [Fixture.References]: {
+    simple: { name: string },
+  }
+}
+
+interface OtherEntity {
+  id: number,
+  name: string,
+  simpleId: number,
 }
 
 class FakeTransformer extends FixtureTransformer<SimpleFixture, SimpleEntity, 'id'> {
@@ -65,6 +78,53 @@ class FakeExecutor extends Executor<SimpleEntity> {
   }
 }
 
+class OtherTransformer extends FixtureTransformer<OtherFixture, OtherEntity, 'id'> {
+  constructor(fixtures: OtherFixture[]) {
+    super(fixtures)
+  }
+
+  isMatchesEntity(entity: OtherEntity, fixture: OtherFixture): boolean {
+    return entity.name === fixture.name
+  }
+
+  mapping(fixture: OtherFixture, relations: { simple?: SimpleEntity }): Omit<OtherEntity, 'id'> {
+    if (!relations.simple) {
+      throw new Error('Relation not found')
+    }
+
+    return {
+      name: fixture.name,
+      simpleId: relations.simple.id,
+    }
+  }
+
+  primaryKey(): 'id' {
+    return 'id'
+  }
+}
+
+class OtherExecutor extends Executor<OtherEntity> {
+  async create(obj: SimpleEntity) {
+    // NO-OP
+  }
+  
+  async readCollection(): Promise<OtherEntity[]> {
+    return []
+  }
+  
+  async read(objOrId: OtherEntity | string) {
+    return undefined
+  }
+  
+  async update(obj: OtherEntity) {
+    // NO-OP
+  }
+  
+  async delete(objOrId: OtherEntity | string) {
+    // NO-OP
+  }
+}
+
 function isSimpleEntity(objOrId: SimpleEntity | string): objOrId is SimpleEntity {
   return (objOrId as SimpleEntity).id != undefined
 }
@@ -101,6 +161,36 @@ test('correct results are returned', async () => {
       delete: [
         { entity: { id: 3, name: 'Baz' } },
       ],
+    },
+  })
+})
+
+
+test('should populate error property if error is thrown when mapping', async () => {
+  const tdm = new TDM()
+
+  const fixtures: OtherFixture[] = [
+    {
+      name: 'Foo',
+      [Fixture.References]: {
+        simple: { name: 'Bar' },
+      }
+    },
+  ]
+
+  tdm.add('other', new OtherTransformer(fixtures), new OtherExecutor())
+
+  const results = await tdm.run({ dryRun: true })
+
+  expect(results).toEqual({
+    other: {
+      create: [{
+        fixture: fixtures[0],
+        error: 'Relation not found'
+      }],
+      modify: [],
+      noop: [],
+      delete: [],
     },
   })
 })

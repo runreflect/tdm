@@ -4,10 +4,6 @@ export class Fixture {
   static readonly References = Symbol('Relations')
 }
 
-export interface IFixture {
-  [Fixture.References]?: Record<string, object>,
-}
-
 export abstract class FixtureTransformer<TFixture, TEntity, TPrimaryKey extends keyof TEntity> {
   fixtures: TFixture[]
   

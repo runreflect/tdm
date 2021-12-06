@@ -1,4 +1,5 @@
 import { Differ } from "../src/differ"
+import { Fixture } from "../src/fixture"
 
 interface ExampleEntity {
   id: number,
