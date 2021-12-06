@@ -1,0 +1,14 @@
+{
+  "include": ["tdm/**/*.ts"],
+  "exclude": ["node_modules"],
+  "compilerOptions": {
+      "rootDir": "./tdm",
+      "outDir": "./dist",
+      "strict": true,
+      "esModuleInterop": true,
+      "forceConsistentCasingInFileNames": true,
+      "experimentalDecorators": true,
+      "emitDecoratorMetadata": true,
+      "declaration": true
+  }
+}
