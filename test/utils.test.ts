@@ -8,6 +8,10 @@ test('toTitleCase retains already capitalized letters', () => {
   expect(toTitleCase('FooBarBaz')).toEqual('FooBarBaz')
 })
 
+test('toTitleCase to handle hyphens', () => {
+  expect(toTitleCase('foo-bar-baz')).toEqual('FooBarBaz')
+})
+
 test('schemaFromRef returns name of Schema', () => {
   expect(schemaFromRef('#/components/schemas/Foo')).toEqual('Foo')
 })

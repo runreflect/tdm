@@ -6,8 +6,6 @@ import { OpenAPI, OpenAPIV3, OpenAPIV3_1 } from "openapi-types"
 import { TypeGenerator } from './open-api/type-generator'
 import fs from 'fs'
 
-const DEFAULT_INTERFACE_IMPORT = "import { Fixture } from 'tdm/fixture'"
-
 export class OpenAPIGenerator implements Generator {
 
   async parse(source: string, destinationDir: string): Promise<GeneratedFile[] | undefined> {
@@ -49,7 +47,7 @@ export class OpenAPIGenerator implements Generator {
         })
       } else {
         const { properties, references } = this.generateProperties(value) || { properties: undefined, references: new Set<string>() }
-        const importsString = generateImports(key, references, DEFAULT_INTERFACE_IMPORT)
+        const importsString = generateImports(key, references)
 
         const sourceFile = project.createSourceFile(`${destinationDir}/${key}.ts`, importsString, { overwrite: true })
 
@@ -57,7 +55,6 @@ export class OpenAPIGenerator implements Generator {
           name: interfaceName,
           isExported: true,
           properties,
-          extends: ['Fixture'],
           docs: generateComment(title),
         })
       }
@@ -83,7 +80,7 @@ export class OpenAPIGenerator implements Generator {
       const keys = Object.entries(value['properties'])
 
       const properties = keys.map(t => {
-        const name = t[0] + (required.has(t[0]) ? '' : '?')
+        const name = '"' + sanitizePropertyName(t[0]) + '"' + (required.has(t[0]) ? '' : '?')
 
         const property = t[1] as any
 
@@ -122,7 +119,7 @@ function generateImports(clazz: string, references: Set<string>, defaultImports?
   Array.from(references).
     filter(reference => reference !== clazz). // remove self-references
     forEach(reference => {
-      importsString += `import { ${reference} } from './${reference}'\n`
+      importsString += `import { ${toTitleCase(reference)} } from './${reference}'\n`
     })
 
   return importsString
@@ -130,4 +127,8 @@ function generateImports(clazz: string, references: Set<string>, defaultImports?
 
 function isOpenAPIV3(value: OpenAPI.Document): value is OpenAPIV3.Document | OpenAPIV3_1.Document {
   return value.hasOwnProperty('components')
+}
+
+function sanitizePropertyName(str: string): string {
+  return str.replace(/\@/g, '')
 }

@@ -5,13 +5,11 @@ const DESTINATION_DIR = 'dist'
 test('parses simple types', async () => {
   const generator = new OpenAPIGenerator()
   const result = await generator.parse('test/resources/openapi/simple-types.yaml', DESTINATION_DIR)
-  const expectedOutput = `import { Fixture } from 'tdm/fixture'
-
-export interface Foo extends Fixture {
-    a?: string;
-    b?: number;
-    c?: number;
-    d?: boolean;
+  const expectedOutput = `export interface Foo {
+    "a"?: string;
+    "b"?: number;
+    "c"?: number;
+    "d"?: boolean;
 }
 `
   expect(result).toEqual([{
@@ -24,22 +22,19 @@ test('parse array types', async () => {
   const generator = new OpenAPIGenerator()
   const result = await generator.parse('test/resources/openapi/arrays.yaml', DESTINATION_DIR)
 
-  const bar = `import { Fixture } from 'tdm/fixture'
-
-export interface Bar extends Fixture {
-    a?: string;
+  const bar = `export interface Bar {
+    "a"?: string;
 }
 `
 
-  const foo = `import { Fixture } from 'tdm/fixture'
-import { Bar } from './Bar'
+  const foo = `import { Bar } from './Bar'
 
-export interface Foo extends Fixture {
-    a?: string[];
-    b?: number[];
-    c?: number[];
-    d?: boolean[];
-    e?: Bar[];
+export interface Foo {
+    "a"?: string[];
+    "b"?: number[];
+    "c"?: number[];
+    "d"?: boolean[];
+    "e"?: Bar[];
 }
 `
 
@@ -58,25 +53,20 @@ export interface Foo extends Fixture {
 test('parse anyOf type', async () => {
   const generator = new OpenAPIGenerator()
   const result = await generator.parse('test/resources/openapi/any-of.yaml', DESTINATION_DIR)
-  const bar = `import { Fixture } from 'tdm/fixture'
-
-export interface Bar extends Fixture {
-    b?: number;
+  const bar = `export interface Bar {
+    "b"?: number;
 }
 `
-  const foo = `import { Fixture } from 'tdm/fixture'
-
-export interface Foo extends Fixture {
-    a?: string;
+  const foo = `export interface Foo {
+    "a"?: string;
 }
 `
 
-  const union = `import { Fixture } from 'tdm/fixture'
-import { Foo } from './Foo'
+  const union = `import { Foo } from './Foo'
 import { Bar } from './Bar'
 
-export interface Union extends Fixture {
-    c?: Foo | Bar;
+export interface Union {
+    "c"?: Foo | Bar;
 }
 `
 
@@ -102,25 +92,20 @@ export interface Union extends Fixture {
 test('parse oneOf type', async () => {
   const generator = new OpenAPIGenerator()
   const result = await generator.parse('test/resources/openapi/one-of.yaml', DESTINATION_DIR)
-  const bar = `import { Fixture } from 'tdm/fixture'
-
-export interface Bar extends Fixture {
-    b?: number;
+  const bar = `export interface Bar {
+    "b"?: number;
 }
 `
-  const foo = `import { Fixture } from 'tdm/fixture'
-
-export interface Foo extends Fixture {
-    a?: string;
+  const foo = `export interface Foo {
+    "a"?: string;
 }
 `
 
-  const union = `import { Fixture } from 'tdm/fixture'
-import { Foo } from './Foo'
+  const union = `import { Foo } from './Foo'
 import { Bar } from './Bar'
 
-export interface Union extends Fixture {
-    c?: Foo | Bar;
+export interface Union {
+    "c"?: Foo | Bar;
 }
 `
 
@@ -143,25 +128,20 @@ export interface Union extends Fixture {
 test('parse allOf type', async () => {
   const generator = new OpenAPIGenerator()
   const result = await generator.parse('test/resources/openapi/all-of.yaml', DESTINATION_DIR)
-  const bar = `import { Fixture } from 'tdm/fixture'
-
-export interface Bar extends Fixture {
-    b?: number;
+  const bar = `export interface Bar {
+    "b"?: number;
 }
 `
-  const foo = `import { Fixture } from 'tdm/fixture'
-
-export interface Foo extends Fixture {
-    a?: string;
+  const foo = `export interface Foo {
+    "a"?: string;
 }
 `
 
-  const union = `import { Fixture } from 'tdm/fixture'
-import { Foo } from './Foo'
+  const union = `import { Foo } from './Foo'
 import { Bar } from './Bar'
 
-export interface Union extends Fixture {
-    c?: Foo & Bar;
+export interface Union {
+    "c"?: Foo & Bar;
 }
 `
   const baz = `import { PaginationOptions } from './PaginationOptions'
@@ -170,10 +150,8 @@ import { Bar } from './Bar'
 export type Baz = PaginationOptions & { 'data': Bar[] };
 `
 
-  const paginationOptions = `import { Fixture } from 'tdm/fixture'
-
-export interface PaginationOptions extends Fixture {
-    cursor?: string;
+  const paginationOptions = `export interface PaginationOptions {
+    "cursor"?: string;
 }
 `
 
@@ -205,11 +183,9 @@ test('parses optional vs required fields', async () => {
   const generator = new OpenAPIGenerator()
   const result = await generator.parse('test/resources/openapi/required.yaml', DESTINATION_DIR)
 
-  const foo = `import { Fixture } from 'tdm/fixture'
-
-export interface Foo extends Fixture {
-    a: string;
-    b?: number;
+  const foo = `export interface Foo {
+    "a": string;
+    "b"?: number;
 }
 `
 
@@ -223,10 +199,8 @@ test('parses enums', async () => {
   const generator = new OpenAPIGenerator()
   const result = await generator.parse('test/resources/openapi/enums.yaml', DESTINATION_DIR)
 
-  const foo = `import { Fixture } from 'tdm/fixture'
-
-export interface Foo extends Fixture {
-    a?: 'black' | 'white' | 'red' | 'green' | 'blue';
+  const foo = `export interface Foo {
+    "a"?: 'black' | 'white' | 'red' | 'green' | 'blue';
 }
 `
 
@@ -240,11 +214,9 @@ test('parse self-referential schemas', async () => {
   const generator = new OpenAPIGenerator()
   const result = await generator.parse('test/resources/openapi/self-refential.yaml', DESTINATION_DIR)
 
-  const foo = `import { Fixture } from 'tdm/fixture'
-
-export interface Foo extends Fixture {
-    a?: string;
-    b?: Foo;
+  const foo = `export interface Foo {
+    "a"?: string;
+    "b"?: Foo;
 }
 `
 
@@ -258,10 +230,8 @@ test('parse object type without $ref', async () => {
   const generator = new OpenAPIGenerator()
   const result = await generator.parse('test/resources/openapi/object.yaml', DESTINATION_DIR)
 
-  const foo = `import { Fixture } from 'tdm/fixture'
-
-export interface Foo extends Fixture {
-    complex?: { 'a': string, 'b': number, 'c': number, 'd': boolean };
+  const foo = `export interface Foo {
+    "complex"?: { 'a': string, 'b': number, 'c': number, 'd': boolean };
 }
 `
 

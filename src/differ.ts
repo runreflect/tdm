@@ -75,7 +75,7 @@ export class Differ<TEntity extends object, TFixture extends object, TPrimaryKey
       }
 
       if (haveModifiedEntity) {
-        toModify.push({ entity: existingEntity, fixture: haveModifiedEntity.candidate, updatedEntity: haveModifiedEntity.updatedEntity })
+        toModify.push({ entity: existingEntity, fixture: haveModifiedEntity.candidate, updatedEntity: haveModifiedEntity.updatedEntity, error: haveModifiedEntity.error })
       } else if (foundEqualCandidate) {
         noop.push({ fixture: foundEqualCandidate, entity: existingEntity })
       } else {

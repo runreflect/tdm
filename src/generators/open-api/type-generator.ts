@@ -1,4 +1,4 @@
-import { schemaFromRef } from '../../utils'
+import { schemaFromRef, toTitleCase } from '../../utils'
 import compact from 'lodash/compact'
 
 const PRIMITIVE_OPEN_API_TYPES_TO_TYPESCRIPT = {
@@ -63,7 +63,13 @@ export class TypeGenerator {
     let typeStr = '{ '
     let isFirst = true
 
-    for (const [key, value] of Object.entries(property['properties'])) {
+    const properties = property['properties']
+
+    if (!properties) {
+      return ''
+    }
+
+    for (const [key, value] of Object.entries(properties)) {
       if (!isFirst) {
         typeStr += ', '
       }
@@ -118,7 +124,7 @@ export class TypeGenerator {
   
     if (schemaName) {
       this.references.add(schemaName)
-      return schemaName
+      return toTitleCase(schemaName)
     }
   
     throw new Error(`Missing $ref property: ${property}`)

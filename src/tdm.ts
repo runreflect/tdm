@@ -1,6 +1,8 @@
 import { Differ, DiffResults } from './differ'
 import { Fixture, FixtureTransformer } from './fixture'
 import { Executor } from './executor'
+import * as Diff from 'diff'
+import { CollectionProgressBar } from './cli/collection-progress-bar'
 
 export class TDM {
   items: Array<{ name: string, transformer: FixtureTransformer<any, any, any>, fixtures: any[], executor: Executor<any> }> //TODO can we get more specific typing here?
@@ -36,7 +38,7 @@ export class TDM {
       if (!existing) {
         throw new Error(`No collection exists for collection name: ${name}`)
       }
-      console.log(`Processing fixtures for transformer: ${transformer.constructor.name}. Num fixtures: ${fixtures.length}`)
+      console.log(`Processing (${fixtures.length}) fixtures for transformer: ${transformer.constructor.name}`)
 
       const candidates = fixtures.map(fixture => {
         const relations = this.retrieveRelationsFunc(name, allCollections)(fixture)
@@ -56,42 +58,93 @@ export class TDM {
       if (!options.dryRun) {
         console.log(`Creating ${diffResults.create.length} entities`, diffResults.create)
         await Promise.all(diffResults.create.map(async item => {
-          try {
-            if (item.entityToCreate) {
-              return await executor.create(item.entityToCreate)
-            } else {
-              console.error('Cannot create entity as it is undefined', item)
-              throw new Error('Cannot create entity as it is undefined')
+          if (!item.error) {
+            try {
+              if (item.entityToCreate) {
+                return await executor.create(item.entityToCreate)
+              } else {
+                console.error('Cannot create entity as it is undefined', item)
+                throw new Error('Cannot create entity as it is undefined')
+              }
+            } catch (e) {
+              console.error("Error when creating entity", item.entityToCreate, e)
+              throw e
             }
-          } catch (e) {
-            console.error("Error when creating entity", item.entityToCreate, e)
-            throw e
+          } else {
+            console.error(`Unable to create entity. Error occurred during mapping: ${item.error}`)
           }
         }))
 
         console.log(`Modifying ${diffResults.modify.length} entities`)
         await Promise.all(diffResults.modify.map(async item => {
-          try {
-            return await executor.update(item.updatedEntity)
-          } catch (e) {
-            console.error("Error when modifying entity", item.updatedEntity, e)
-            throw e
+          if (!item.error) {
+            console.log('modfying entity', item)
+            try {
+              return await executor.update(item.updatedEntity)
+            } catch (e) {
+              console.error("Error when modifying entity", item.updatedEntity, e)
+              throw e
+            }
+          } else {
+            console.error(`Unable to modify entity. Error occurred during mapping: ${item.error}`)
           }
         }))
 
         console.log(`Deleting ${diffResults.delete.length} entities`)
         await Promise.all(diffResults.delete.map(async item => {
-          try {
-            return await executor.delete(item.entity)
-          } catch (e) {
-            console.error("Error when deleting entity", item.entity, e)
-            throw e
+          if (!item.error) {
+            try {
+              return await executor.delete(item.entity)
+            } catch (e) {
+              console.error("Error when deleting entity", item.entity, e)
+              throw e
+            }
+          } else {
+            console.error(`Unable to delete entity. Error occurred during mapping: ${item.error}`)
           }
         }))
       }
 
       aggregatedResults[name] = diffResults
     }))
+
+    // Print results
+    for (const [name, diffResults] of Object.entries(aggregatedResults)) {
+      console.log('')
+      console.log(`${name}:`)
+      console.log('---')
+      console.log(`Noop: ${diffResults.noop.length} entries`)
+      console.log(`Create: ${diffResults.create.length} entries`)
+      
+      diffResults.create.forEach((entry, idx) => {
+        console.log(`[${idx}]:`)
+        if (entry.error) {
+          console.log(`ERROR: ${entry.error}`)
+        } else {
+          printDiff({}, entry.entityToCreate ?? {})
+        }
+      })
+
+      console.log(`Modify: ${diffResults.modify.length} entries`)
+      diffResults.modify.forEach((entry, idx) => {
+        console.log(`[${idx}]:`)
+        if (entry.error) {
+          console.log(`ERROR: ${entry.error}`)
+        } else {
+          printDiff(entry.entity, entry.updatedEntity ?? {})
+        }
+      })
+
+      console.log(`Delete: ${diffResults.delete.length} entries`)
+      diffResults.delete.forEach((entry, idx) => {
+        console.log(`[${idx}]:`)
+        if (entry.error) {
+          console.log(`ERROR: ${entry.error}`)
+        } else {
+          printDiff(entry.entity, {})
+        }
+      })
+    }
 
     return aggregatedResults
   }
@@ -100,14 +153,18 @@ export class TDM {
    * Materialize all data associated with relations inside the fixtures that we're managing.
    */
   private async retrieveRelatedCollections(): Promise<Map<string, any[]>> {
+    const progressBar = new CollectionProgressBar(this.items)
     const allCollections = new Map<string, any[]>() //TODO better type
 
-    await Promise.all(this.items.map(async item => {
-      console.log(`Retrieving all results for relation: ${item.name}`)
-
+    console.log(`Retrieving existing data for ${this.items.length} collections...`)
+    await Promise.all(this.items.map(async (item, idx) => {
       const results = await item.executor.readCollection()
+      progressBar.complete(item.name)
+
       allCollections.set(item.name, results)
     }))
+
+    progressBar.stop()
 
     return allCollections
   }
@@ -165,4 +222,16 @@ export class TDM {
 
 function hasOwnProperty<X extends {}, Y extends PropertyKey>(obj: X, prop: Y): obj is X & Record<Y, unknown> {
   return obj.hasOwnProperty(prop)
+}
+
+function printDiff(existingValue: object, newValue: object) {
+  const diff = Diff.diffJson(existingValue, newValue, { ignoreWhitespace: false })
+  diff.forEach((part) => {
+    // green for additions, red for deletions
+    // grey for common parts
+    const color = part.added ? 'green' :
+    part.removed ? 'red' : 'grey';
+    
+    console.log(part.value[color]);
+  })
 }
