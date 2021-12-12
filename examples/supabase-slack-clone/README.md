@@ -69,5 +69,6 @@ yarn create next-app --example with-supabase-auth-realtime-db realtime-chat-app
 ## Running tdm
 
 ```
+npm run tpm-build
 node dist/index.js <app-name> <api-key> <dry-run-boolean>
 ```
