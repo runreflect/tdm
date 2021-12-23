@@ -1,0 +1,19 @@
+{
+  "name": "github-issue-example",
+  "version": "0.1.1",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next",
+    "export": "next export",
+    "build": "next build",
+    "start": "next start",
+    "tdm-build": "tsc --project tsconfig.json"
+  },
+  "devDependencies": {
+    "octokit": "^1.7.1",
+    "tdm": "file:../../dist"
+  },
+  "dependencies": {
+    "axios": "^0.24.0"
+  }
+}
