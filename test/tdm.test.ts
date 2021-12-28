@@ -1,161 +1,110 @@
+import { Mapper, Property } from '../src/mapper'
 import { Executor } from '../src/executor'
-import { Fixture, FixtureTransformer } from '../src/fixture'
-import { TDM } from '../src/tdm'
+import { Fixture, Relations } from '../src/fixture'
+import { TDM, RunError } from '../src/tdm'
+import { Printer } from '../src/printer'
 
-interface SimpleFixture {
-  name: string,
-  description?: string,
-  [Fixture.References]?: {},
-}
-
-interface SimpleEntity {
+interface Simple {
   id: number,
   name: string,
   description?: string,
 }
 
-interface OtherFixture {
-  name: string,
-  [Fixture.References]: {
-    simple: { name: string },
-  }
-}
-
-interface OtherEntity {
+interface Other {
   id: number,
   name: string,
   simpleId: number,
 }
 
-class FakeTransformer extends FixtureTransformer<SimpleFixture, SimpleEntity, 'id'> {
-  constructor(fixtures: SimpleFixture[]) {
-    super(fixtures)
-  }
-
-  isMatchesEntity(entity: SimpleEntity, fixture: SimpleFixture): boolean {
-    return entity.name === fixture.name
-  }
-
-  mapping(fixture: SimpleFixture): Omit<SimpleEntity, 'id'> {
-    return {
-      name: fixture.name,
-      description: fixture.description,
-    }
-  }
-
-  primaryKey(): 'id' {
-    return 'id'
-  }
+class SimpleMapper extends Mapper<Simple> {
+  fields = {
+    id: Property.Identifier,
+    name: Property.Comparator,
+    description: Property.Field,
+  } as const
 }
 
-const EXISTING_ENTITIES: SimpleEntity[] = [ // 3 entities exist in DB
+class OtherMapper extends Mapper<Other> {
+  fields = {
+    id: Property.Identifier,
+    name: Property.Comparator,
+    simpleId: {
+      mapper: new SimpleMapper(),
+      field: 'id',
+    }
+  } as const
+}
+
+const EXISTING_ENTITIES: Simple[] = [ // 3 entities exist in DB
   { id: 1, name: 'Foo', description: 'Foo description' },
   { id: 2, name: 'Bar', description: 'Different description' },
   { id: 3, name: 'Baz' },
 ]
 
-class FakeExecutor extends Executor<SimpleEntity> {
-  async create(obj: SimpleEntity) {
+class SimpleExecutor extends Executor<Simple> {
+  async create(obj: Simple) {
     // NO-OP
   }
   
-  async readCollection(): Promise<SimpleEntity[]> {
+  async readAll(): Promise<Simple[]> {
     return EXISTING_ENTITIES
   }
   
-  async read(objOrId: SimpleEntity | string) {
-    const id = isSimpleEntity(objOrId) ? objOrId.id : objOrId
-
-    return EXISTING_ENTITIES.find(entity => entity.id === id)
-  }
-  
-  async update(obj: SimpleEntity) {
+  async update(obj: Simple) {
     // NO-OP
   }
   
-  async delete(objOrId: SimpleEntity | string) {
+  async delete(objOrId: Simple | string) {
     // NO-OP
   }
 }
 
-class OtherTransformer extends FixtureTransformer<OtherFixture, OtherEntity, 'id'> {
-  constructor(fixtures: OtherFixture[]) {
-    super(fixtures)
-  }
-
-  isMatchesEntity(entity: OtherEntity, fixture: OtherFixture): boolean {
-    return entity.name === fixture.name
-  }
-
-  mapping(fixture: OtherFixture, relations: { simple?: SimpleEntity }): Omit<OtherEntity, 'id'> {
-    if (!relations.simple) {
-      throw new Error('Relation not found')
-    }
-
-    return {
-      name: fixture.name,
-      simpleId: relations.simple.id,
-    }
-  }
-
-  primaryKey(): 'id' {
-    return 'id'
-  }
-}
-
-class OtherExecutor extends Executor<OtherEntity> {
-  async create(obj: SimpleEntity) {
+class OtherExecutor extends Executor<Other> {
+  async create(obj: Other) {
     // NO-OP
   }
   
-  async readCollection(): Promise<OtherEntity[]> {
+  async readAll(): Promise<Other[]> {
     return []
   }
   
-  async read(objOrId: OtherEntity | string) {
-    return undefined
-  }
-  
-  async update(obj: OtherEntity) {
+  async update(obj: Other) {
     // NO-OP
   }
   
-  async delete(objOrId: OtherEntity | string) {
+  async delete(objOrId: Other | string) {
     // NO-OP
   }
 }
 
-function isSimpleEntity(objOrId: SimpleEntity | string): objOrId is SimpleEntity {
-  return (objOrId as SimpleEntity).id != undefined
-}
-
+beforeEach(() => {
+  jest.spyOn(Printer, 'print').mockImplementation(() => {})
+  jest.spyOn(Printer, 'printDiff').mockImplementation(() => {})
+})
 
 test('correct results are returned', async () => {
   const tdm = new TDM()
 
-  const fixtures: SimpleFixture[] = [
-    { name: 'Foo', description: 'Foo description' },
-    { name: 'Bar', description: 'Bar description' },
-    { name: 'New' }
+  const fixtures: Fixture<SimpleMapper, Simple>[] = [
+    { name: 'Foo', description: 'Foo description', [Relations]: {} },
+    { name: 'Bar', description: 'Bar description', [Relations]: {} },
+    { name: 'New', description: undefined, [Relations]: {} },
   ]
 
-  tdm.add('example', new FakeTransformer(fixtures), new FakeExecutor())
+  tdm.add(fixtures, new SimpleMapper(), new SimpleExecutor())
 
   const results = await tdm.run({ dryRun: true })
 
   expect(results).toEqual({
-    example: {
+    SimpleMapper: {
       create: [{
-        fixture: { name: 'New' },
         entityToCreate: { name: 'New', description: undefined },
       }],
       modify: [{
-        fixture: { name: 'Bar', description: 'Bar description' },
         entity: { id: 2, name: 'Bar', description: 'Different description'},
         updatedEntity: { id: 2, name: 'Bar', description: 'Bar description' },
       }],
       noop: [{
-        fixture: { name: 'Foo', description: 'Foo description' },
         entity: { id: 1, name: 'Foo', description: 'Foo description' },
       }],
       delete: [
@@ -165,28 +114,79 @@ test('correct results are returned', async () => {
   })
 })
 
-
-test('should populate error property if error is thrown when mapping', async () => {
+test('should handle relations', async () => {
   const tdm = new TDM()
+  
+  const simpleFixtures: Fixture<SimpleMapper, Simple>[] = [
+    { name: 'Foo', description: 'Foo description', [Relations]: {} },
+    { name: 'Bar', description: 'Bar description', [Relations]: {} },
+    { name: 'New', description: undefined, [Relations]: {} },
+  ]
 
-  const fixtures: OtherFixture[] = [
+  const otherFixtures: Fixture<OtherMapper, Other>[] = [
     {
-      name: 'Foo',
-      [Fixture.References]: {
-        simple: { name: 'Bar' },
+      name: 'Something New',
+      [Relations]: {
+        simpleId: { name: 'Foo' },
       }
     },
   ]
 
-  tdm.add('other', new OtherTransformer(fixtures), new OtherExecutor())
+  tdm.add(simpleFixtures, new SimpleMapper(), new SimpleExecutor())
+  tdm.add(otherFixtures, new OtherMapper(), new OtherExecutor())
 
   const results = await tdm.run({ dryRun: true })
 
   expect(results).toEqual({
-    other: {
+    OtherMapper: {
       create: [{
-        fixture: fixtures[0],
-        error: 'Relation not found'
+        entityToCreate: { name: 'Something New', simpleId: 1 },
+      }],
+      modify: [],
+      noop: [],
+      delete: [],
+    },
+    SimpleMapper: {
+      create: [{
+        entityToCreate: { name: 'New', description: undefined },
+      }],
+      modify: [{
+        entity: { id: 2, name: 'Bar', description: 'Different description'},
+        updatedEntity: { id: 2, name: 'Bar', description: 'Bar description' },
+      }],
+      noop: [{
+        entity: { id: 1, name: 'Foo', description: 'Foo description' },
+      }],
+      delete: [
+        { entity: { id: 3, name: 'Baz' } },
+      ],
+    }
+  })
+})
+
+test('should populate error property if relation cannot be resolved', async () => {
+  const tdm = new TDM()
+  
+  const otherFixtures: Fixture<OtherMapper, Other>[] = [
+    {
+      name: 'Something New',
+      [Relations]: {
+        simpleId: {
+          name: 'Foo',
+        },
+      }
+    },
+  ]
+
+  // Note that 'SimpleMapper' is not included
+  tdm.add(otherFixtures, new OtherMapper(), new OtherExecutor())
+
+  const results = await tdm.run({ dryRun: true })
+
+  expect(results).toEqual({
+    OtherMapper: {
+      create: [{
+        entityToCreate: { name: 'Something New', simpleId: { [RunError]: 'Relation not found' } },
       }],
       modify: [],
       noop: [],

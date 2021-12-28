@@ -1,15 +1,15 @@
 import { TDM } from "tdm/tdm"
-import { IssueExecutor } from "./transformers/issue-executor"
-import { IssueTransformer } from "./transformers/issue-transformer"
 import { issues } from "./fixtures/issue"
-import { GithubApi } from "./transformers/api"
+import { IssueMapper } from "./issues/issue-mapper"
+import { IssueExecutor } from "./issues/issue-executor"
+import { GithubApi } from "./api"
 
 async function main(apiKey: string, owner: string, repo: string, dryRun: boolean) {
   const tdm = new TDM()
 
   const githubApi = new GithubApi(owner, apiKey)
 
-  tdm.add('issue', new IssueTransformer(issues), new IssueExecutor(githubApi, owner, repo))
+  tdm.add(issues, new IssueMapper(), new IssueExecutor(githubApi, owner, repo))
 
   await tdm.run({ dryRun })
 }

@@ -14,13 +14,8 @@ export class ChannelExecutor extends Executor<Channel> {
     return this.api.createChannel(obj)
   }
 
-  async readCollection(): Promise<Channel[]> {
+  async readAll(): Promise<Channel[]> {
     return this.api.getChannels()
-  }
-
-  async read(objOrId: Channel | number): Promise<Channel | undefined> {
-    //TODO Update call to retrieve single channel
-    return (await this.api.getChannels()).find(channel => channel.id)
   }
 
   async update(obj: Channel): Promise<unknown> {

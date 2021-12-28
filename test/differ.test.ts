@@ -1,91 +1,73 @@
 import { Differ } from "../src/differ"
-import { Fixture } from "../src/fixture"
+import { Mapper, Property } from "../src/mapper"
 
-interface ExampleEntity {
+interface Example {
   id: number,
   name: string,
   description: string,
 }
 
-interface ExampleFixture {
-  name: string,
-  description: string,
+class ExampleMapper extends Mapper<Example> {
+  fields = {
+    id: Property.Identifier,
+    name: Property.Comparator,
+    description: Property.Field,
+  }
 }
 
-interface MoreComplexEntity {
+interface MoreComplex {
   id: number,
   name: string,
   description?: string | null,
   somethingElse?: number,
 }
 
-interface MoreComplexFixture {
-  name: string,
-  description?: string | null,
-  somethingElse?: number,
+class MoreComplexMapper extends Mapper<MoreComplex> {
+  fields = {
+    id: Property.Identifier,
+    name: Property.Comparator,
+    description: Property.Field,
+    somethingElse: Property.Field,
+  }
 }
 
 test('set as create when isEqual result is false', () => {
-  const differ = new Differ<ExampleEntity, ExampleFixture, 'id'>()
+  const differ = new Differ<Example, ExampleMapper>()
 
-  const exampleEntity = { id: 1, name: 'foo', description: 'something' }
+  const existing = [{ id: 1, name: 'foo', description: 'something' }]
 
-  const exampleFixture = { name: 'bar', description: 'something' }
+  const candidates = [{ name: 'bar', description: 'something' }]
 
-  function isMatchesEntity(entity: ExampleEntity, fixture: ExampleFixture) {
-    return entity.name === fixture.name
-  }
-
-  function mapping(fixture: ExampleFixture): Omit<ExampleEntity, 'id'> {
-    return {
-      name: fixture.name,
-      description: fixture.description,
-    }
-  }
-
-  const candidates = [{ fixture: exampleFixture, relations: {} }]
+  const mapper = new ExampleMapper()
 
   expect(
-    differ.diff({ existing: [exampleEntity], candidates, primaryKey: 'id', isMatchesEntity, mapping })
+    differ.diff({ existing, candidates, mapper })
   ).toEqual({
     noop: [],
     modify: [],
     create: [{
-      fixture: exampleFixture,
-      entityToCreate: { name: 'bar', description: 'something' },
+      entityToCreate: candidates[0],
     }],
     delete: [{
-      entity: exampleEntity,
+      entity: existing[0],
     }],
   })
 })
 
 test('set as noop when isEqual result is true and mapping matches', () => {
-  const differ = new Differ<ExampleEntity, ExampleFixture, 'id'>()
+  const differ = new Differ<Example, ExampleMapper>()
 
-  const exampleEntity = { id: 1, name: 'foo', description: 'foo description' }
+  const existing = [{ id: 1, name: 'foo', description: 'foo description' }]
 
-  const exampleFixture = { name: 'foo', description: 'foo description' }
+  const candidates = [{ name: 'foo', description: 'foo description' }]
 
-  function isMatchesEntity(entity: ExampleEntity, fixture: ExampleFixture) {
-    return entity.name === fixture.name
-  }
-
-  function mapping(fixture: ExampleFixture): Omit<ExampleEntity, 'id'> {
-    return {
-      name: fixture.name,
-      description: fixture.description,
-    }
-  }
-
-  const candidates = [{ fixture: exampleFixture, relations: {} }]
+  const mapper = new ExampleMapper()
 
   expect(
-    differ.diff({ existing: [exampleEntity], candidates, primaryKey: 'id', isMatchesEntity, mapping })
+    differ.diff({ existing, candidates, mapper })
   ).toEqual({
     noop: [{
-      fixture: exampleFixture,
-      entity: exampleEntity,
+      entity: existing[0],
     }],
     modify: [],
     create: [],
@@ -94,42 +76,29 @@ test('set as noop when isEqual result is true and mapping matches', () => {
 })
 
 test('set as modify when isEqual result is true and mapping does not match', () => {
-  const differ = new Differ<MoreComplexEntity, MoreComplexFixture, 'id'>()
+  const differ = new Differ<MoreComplex, MoreComplexMapper>()
 
-  const exampleEntity = {
+  const existing = [{
     id: 1,
     name: 'foo',
     description: 'Foo description',
     somethingElse: 5,
-  }
+  }]
 
-  const exampleFixture = {
-    name: 'foo',
-    description: 'Foo description',
-    somethingElse: 10,
-  }
+  const candidates = [{
+      name: 'foo',
+      description: 'Foo description',
+      somethingElse: 10,
+  }]
 
-  function isMatchesEntity(entity: MoreComplexEntity, fixture: MoreComplexFixture) {
-    return entity.name === fixture.name
-  }
-
-  function mapping(fixture: MoreComplexFixture): Omit<MoreComplexEntity, 'id'> {
-    return {
-      name: fixture.name,
-      description: fixture.description,
-      somethingElse: fixture.somethingElse,
-    }
-  }
-
-  const candidates = [{ fixture: exampleFixture, relations: {} }]
+  const mapper = new MoreComplexMapper()
 
   expect(
-    differ.diff({ existing: [exampleEntity], candidates, primaryKey: 'id', isMatchesEntity, mapping })
+    differ.diff({ existing, candidates, mapper })
   ).toEqual({
     noop: [],
     modify: [{
-      fixture: exampleFixture,
-      entity: exampleEntity,
+      entity: existing[0],
       updatedEntity: {
         id: 1,
         name: 'foo',
@@ -143,31 +112,19 @@ test('set as modify when isEqual result is true and mapping does not match', () 
 })
 
 test('should consider null and undefined properties to be equal', () => {
-  const differ = new Differ<MoreComplexEntity, MoreComplexFixture, 'id'>()
+  const differ = new Differ<MoreComplex, MoreComplexMapper>()
 
-  const exampleEntity = { id: 1, name: 'foo', description: undefined }
+  const existing = [{ id: 1, name: 'foo', description: undefined }]
 
-  const exampleFixture = { name: 'foo', description: null }
+  const candidates = [{ name: 'foo', description: null }]
 
-  function isMatchesEntity(entity: MoreComplexEntity, fixture: MoreComplexFixture) {
-    return entity.name === fixture.name
-  }
-
-  function mapping(fixture: MoreComplexFixture): Omit<MoreComplexEntity, 'id'> {
-    return {
-      name: fixture.name,
-      description: fixture.description,
-    }
-  }
-
-  const candidates = [{ fixture: exampleFixture, relations: {} }]
+  const mapper = new MoreComplexMapper()
 
   expect(
-    differ.diff({ existing: [exampleEntity], candidates, primaryKey: 'id', isMatchesEntity, mapping })
+    differ.diff({ existing, candidates, mapper })
   ).toEqual({
     noop: [{
-      fixture: exampleFixture,
-      entity: exampleEntity,
+      entity: existing[0],
     }],
     modify: [],
     create: [],

@@ -14,13 +14,8 @@ export class UserExecutor extends Executor<User> {
     return this.api.createUser(obj)
   }
 
-  async readCollection(): Promise<User[]> {
+  async readAll(): Promise<User[]> {
     return await this.api.getUsers()
-  }
-
-  async read(objOrId: User | number): Promise<User | undefined> {
-    //TODO Update call to retrieve single user
-    return (await this.api.getUsers()).find(user => user.id)
   }
 
   async update(obj: User): Promise<unknown> {

@@ -1,11 +1,34 @@
 import { Differ, DiffResults } from './differ'
-import { Fixture, FixtureTransformer } from './fixture'
+import { Mapper } from './mapper'
+import { Fixture, Relations } from './fixture'
 import { Executor } from './executor'
-import * as Diff from 'diff'
 import { CollectionProgressBar } from './cli/collection-progress-bar'
+import { Printer } from './printer'
+import matches from 'lodash/matches'
+import clone from 'lodash/clone'
+
+type AggregatedResults = Record<string, DiffResults<unknown, Mapper<unknown>>>
+
+type CreateItem = {
+  entityToCreate?: unknown
+  error?: string
+}
+
+type ModifyItem = {
+  entity: unknown;
+  updatedEntity?: Mapper<unknown>
+  error?: string
+}
+
+type DeleteItem = {
+  entity: unknown
+  error?: string
+}
+
+export const RunError: unique symbol = Symbol('RunError')
 
 export class TDM {
-  items: Array<{ name: string, transformer: FixtureTransformer<any, any, any>, fixtures: any[], executor: Executor<any> }> //TODO can we get more specific typing here?
+  items: Array<{ name: string, fixtures: Fixture<any, any>[], mapper: Mapper<any>, executor: Executor<any> }> //TODO can we get more specific typing here?
 
   constructor() {
     this.items = []
@@ -15,137 +38,61 @@ export class TDM {
    * Add a set of fixtures to be managed by TDM.
    */
   add<
-    TExecutor extends Executor<TEntity>,
-    TFixture,
-    TEntity,
-    TPrimaryKey extends keyof TEntity
-  >(name: string, transformer: FixtureTransformer<TFixture, TEntity, TPrimaryKey>, executor: TExecutor): void {
-    this.items.push({ name, transformer, fixtures: transformer.fixtures, executor })
+    T1,
+    TMapper extends Mapper<T1>,
+    TFixture extends Fixture<TMapper, T1>,
+    TExecutor extends Executor<T1>
+  >(fixtures: TFixture[], mapper: TMapper, executor: TExecutor): void {
+    const name = mapper.constructor.name
+    this.items.push({ name, fixtures, mapper, executor })
   }
 
   /**
    * Run the diffing logic and optionally execute the required changes to get the data sources into their
    * expected state.
    */
-  async run(options: { dryRun: boolean }): Promise<Record<string, DiffResults<object, object, never>>> {
-    const aggregatedResults: Record<string, DiffResults<object, object, never>> = {} //TODO better type
+  async run(options: { dryRun: boolean }): Promise<AggregatedResults> {
+    const aggregatedResults: AggregatedResults = {}
+    const executors: Record<string, Executor<any>> = {}
 
     const allCollections = await this.retrieveRelatedCollections()
 
-    await Promise.all(this.items.map(async ({ name, transformer, fixtures, executor }) => {
+    await Promise.all(this.items.map(async ({ name, fixtures, mapper, executor }) => {
       const existing = allCollections.get(name)
 
       if (!existing) {
         throw new Error(`No collection exists for collection name: ${name}`)
       }
-      console.log(`Processing (${fixtures.length}) fixtures for transformer: ${transformer.constructor.name}`)
+      Printer.print(`Processing (${fixtures.length}) fixtures for mapper: ${mapper.constructor.name}`)
 
       const candidates = fixtures.map(fixture => {
-        const relations = this.retrieveRelationsFunc(name, allCollections)(fixture)
-        return { fixture, relations }
+        const relations = this.retrieveRelations(mapper, allCollections, fixture)
+        return combine(fixture, relations)
       })
 
-      const diffResults = new Differ().diff({
-        existing,
-        //@ts-ignore
-        candidates,
-        //@ts-ignore
-        primaryKey: transformer.primaryKey(),
-        isMatchesEntity: transformer.isMatchesEntity,
-        mapping: transformer.mapping
-      })
-
-      if (!options.dryRun) {
-        console.log(`Creating ${diffResults.create.length} entities`, diffResults.create)
-        await Promise.all(diffResults.create.map(async item => {
-          if (!item.error) {
-            try {
-              if (item.entityToCreate) {
-                return await executor.create(item.entityToCreate)
-              } else {
-                console.error('Cannot create entity as it is undefined', item)
-                throw new Error('Cannot create entity as it is undefined')
-              }
-            } catch (e) {
-              console.error("Error when creating entity", item.entityToCreate, e)
-              throw e
-            }
-          } else {
-            console.error(`Unable to create entity. Error occurred during mapping: ${item.error}`)
-          }
-        }))
-
-        console.log(`Modifying ${diffResults.modify.length} entities`)
-        await Promise.all(diffResults.modify.map(async item => {
-          if (!item.error) {
-            console.log('modfying entity', item)
-            try {
-              return await executor.update(item.updatedEntity)
-            } catch (e) {
-              console.error("Error when modifying entity", item.updatedEntity, e)
-              throw e
-            }
-          } else {
-            console.error(`Unable to modify entity. Error occurred during mapping: ${item.error}`)
-          }
-        }))
-
-        console.log(`Deleting ${diffResults.delete.length} entities`)
-        await Promise.all(diffResults.delete.map(async item => {
-          if (!item.error) {
-            try {
-              return await executor.delete(item.entity)
-            } catch (e) {
-              console.error("Error when deleting entity", item.entity, e)
-              throw e
-            }
-          } else {
-            console.error(`Unable to delete entity. Error occurred during mapping: ${item.error}`)
-          }
-        }))
-      }
+      const diffResults = new Differ().diff({ existing, candidates, mapper })
 
       aggregatedResults[name] = diffResults
+      executors[name] = executor
     }))
 
-    // Print results
-    for (const [name, diffResults] of Object.entries(aggregatedResults)) {
-      console.log('')
-      console.log(`${name}:`)
-      console.log('---')
-      console.log(`Noop: ${diffResults.noop.length} entries`)
-      console.log(`Create: ${diffResults.create.length} entries`)
-      
-      diffResults.create.forEach((entry, idx) => {
-        console.log(`[${idx}]:`)
-        if (entry.error) {
-          console.log(`ERROR: ${entry.error}`)
-        } else {
-          printDiff({}, entry.entityToCreate ?? {})
-        }
-      })
+    printResults(aggregatedResults)
 
-      console.log(`Modify: ${diffResults.modify.length} entries`)
-      diffResults.modify.forEach((entry, idx) => {
-        console.log(`[${idx}]:`)
-        if (entry.error) {
-          console.log(`ERROR: ${entry.error}`)
-        } else {
-          printDiff(entry.entity, entry.updatedEntity ?? {})
-        }
-      })
+    if (!options.dryRun) {
+      for (const [name, diffResults] of Object.entries(aggregatedResults)) {
+        const executor = executors[name]
 
-      console.log(`Delete: ${diffResults.delete.length} entries`)
-      diffResults.delete.forEach((entry, idx) => {
-        console.log(`[${idx}]:`)
-        if (entry.error) {
-          console.log(`ERROR: ${entry.error}`)
-        } else {
-          printDiff(entry.entity, {})
-        }
-      })
+        Printer.print(`Creating ${diffResults.create.length} entities`, diffResults.create)
+        await Promise.all(diffResults.create.map(item => doCreate(item, executor)))
+  
+        Printer.print(`Modifying ${diffResults.modify.length} entities`)
+        await Promise.all(diffResults.modify.map(item => doModify(item, executor)))
+  
+        Printer.print(`Deleting ${diffResults.delete.length} entities`)
+        await Promise.all(diffResults.delete.map(item => doDelete(item, executor)))
+      }
     }
-
+    
     return aggregatedResults
   }
 
@@ -156,9 +103,9 @@ export class TDM {
     const progressBar = new CollectionProgressBar(this.items)
     const allCollections = new Map<string, any[]>() //TODO better type
 
-    console.log(`Retrieving existing data for ${this.items.length} collections...`)
+    Printer.print(`Retrieving existing data for ${this.items.length} collections...`)
     await Promise.all(this.items.map(async (item, idx) => {
-      const results = await item.executor.readCollection()
+      const results = await item.executor.readAll()
       progressBar.complete(item.name)
 
       allCollections.set(item.name, results)
@@ -169,69 +116,127 @@ export class TDM {
     return allCollections
   }
 
-  private retrieveRelationsFunc(name: string, allCollections: Map<string, any[]>) {
-    const items = this.items
-    const item = items.find(item => item.name === name)
+  private retrieveRelations(mapper: Mapper<any>, allCollections: Map<string, any[]>, fixture: Fixture<any, any>) {
+    return Object.entries(fixture[Relations] || {}).map(([property, relation]) => {
+      const relationDetails = mapper.fields[property] //TODO validate it is a relation
 
-    if (!item) {
-      throw new Error(`Unable to link relation. No transformer has been added with name ${name}`)
-    }
-
-    function traverseForRelations(obj: object | any[]): object {
-      if (!item) {
-        throw new Error(`Unable to link relation. No transformer has been added with name ${name}`)
+      if (!relationDetails) {
+        return { [property]: { [RunError]: `No mapper defined for relation ${property}` } }
       }
 
-      const result: Record<string, any> = {}
+      //@ts-ignore
+      const relationMapper = relationDetails['mapper']
+      const items = allCollections.get(relationMapper.constructor.name)
 
-      if (hasOwnProperty(obj, Fixture.References)) {
-        const relations = obj[Fixture.References] as object
-    
-        Object.keys(relations).forEach(relationName => {
-          //@ts-ignore
-          const toCompare = obj[Fixture.References][relationName] as any
-          const transformer = items.find(item => item.name === relationName)?.transformer
-    
-          const collection = allCollections.get(relationName) || []
-          const match = collection.find(collectionEntity => transformer && transformer.isMatchesEntity(collectionEntity, toCompare))
-
-          if (!match) {
-            console.debug(`No entity matches the fixture reference '${relationName}' with value '${JSON.stringify(toCompare)}'`)
-          }
-          //@ts-ignore
-          result[relationName] = match
-        })
+      if (!items) {
+        return { [property]: { [RunError]: 'Relation not found' } }
       }
 
-      for (const [key, value] of Object.entries(obj)) {
-        if (Array.isArray(value)) {
-          result[key] = value.map(valueItem => traverseForRelations(valueItem))
-        } else if (typeof value === 'object') { // object
-          result[key] = traverseForRelations(value)
-        }
-      }
-    
-      return result
-    }
+      const match = items.find(item => matches(relation)(item))
 
-    return function(fixture: any) {
-      return traverseForRelations(fixture)
-    }
+      if (!match) {
+        return { [property]: { [RunError]: 'Match not found' } }
+      }
+
+      //@ts-ignore
+      const field = mapper.fields[property]['field']
+
+      return { [property]: match[field] }
+    })
   }
 }
 
-function hasOwnProperty<X extends {}, Y extends PropertyKey>(obj: X, prop: Y): obj is X & Record<Y, unknown> {
-  return obj.hasOwnProperty(prop)
+function combine(fixture: Fixture<any, any>, relations: any[]) {
+  let result = clone(fixture)
+  for (let item of relations) {
+    result = { ...result, ...item }
+  }
+
+  //@ts-ignore
+  delete result[Relations]
+
+  return result
 }
 
-function printDiff(existingValue: object, newValue: object) {
-  const diff = Diff.diffJson(existingValue, newValue, { ignoreWhitespace: false })
-  diff.forEach((part) => {
-    // green for additions, red for deletions
-    // grey for common parts
-    const color = part.added ? 'green' :
-    part.removed ? 'red' : 'grey';
+async function doCreate(item: CreateItem, executor: Executor<any>): Promise<void> {
+  if (!item.error) {
+    try {
+      if (item.entityToCreate) {
+        return await executor.create(item.entityToCreate)
+      } else {
+        console.error('Cannot create entity as it is undefined', item)
+        throw new Error('Cannot create entity as it is undefined')
+      }
+    } catch (e) {
+      console.error("Error when creating entity", item.entityToCreate, e)
+      throw e
+    }
+  } else {
+    console.error(`Unable to create entity. Error occurred during mapping: ${item.error}`)
+  }
+}
+
+async function doModify(item: ModifyItem, executor: Executor<any>): Promise<void> {
+  if (!item.error) {
+    try {
+      return await executor.update(item.updatedEntity)
+    } catch (e) {
+      console.error("Error when modifying entity", item.updatedEntity, e)
+      throw e
+    }
+  } else {
+    console.error(`Unable to modify entity. Error occurred during mapping: ${item.error}`)
+  }
+}
+
+async function doDelete(item: DeleteItem, executor: Executor<any>): Promise<void> {
+  if (!item.error) {
+    try {
+      return await executor.delete(item.entity)
+    } catch (e) {
+      console.error("Error when deleting entity", item.entity, e)
+      throw e
+    }
+  } else {
+    console.error(`Unable to delete entity. Error occurred during mapping: ${item.error}`)
+  }
+}
+
+function printResults(aggregatedResults: AggregatedResults) {
+  for (const [name, diffResults] of Object.entries(aggregatedResults)) {
+    Printer.print('')
+    Printer.print(`${name}:`)
+    Printer.print('---')
+    Printer.print(`Noop: ${diffResults.noop.length} entries`)
+    Printer.print(`Create: ${diffResults.create.length} entries`)
     
-    console.log(part.value[color]);
-  })
+    diffResults.create.forEach((entry, idx) => {
+      Printer.print(`[${idx}]:`)
+      if (entry.error) {
+        Printer.print(`ERROR: ${entry.error}`)
+      } else {
+        Printer.printDiff({}, entry.entityToCreate as object ?? {})
+      }
+    })
+
+    Printer.print(`Modify: ${diffResults.modify.length} entries`)
+    diffResults.modify.forEach((entry, idx) => {
+      Printer.print(`[${idx}]:`)
+      if (entry.error) {
+        Printer.print(`ERROR: ${entry.error}`)
+      } else {
+        Printer.printDiff(entry.entity as object, entry.updatedEntity ?? {})
+      }
+    })
+
+    Printer.print(`Delete: ${diffResults.delete.length} entries`)
+    diffResults.delete.forEach((entry, idx) => {
+      Printer.print(`[${idx}]:`)
+      if (entry.error) {
+        Printer.print(`ERROR: ${entry.error}`)
+      } else {
+        Printer.printDiff(entry.entity as object, {})
+      }
+    })
+  }
 }

@@ -1,14 +1,16 @@
+import { Fixture, Relations } from 'tdm/fixture'
+import { UserMapper } from '../mappers/users/user-mapper'
 import { User } from '../schemas/user'
 
-export type UserFixture = Omit<Required<User>, 'id'>
-
-export const users: UserFixture[] = [
+export const users: Fixture<UserMapper, User>[] = [
   {
     username: 'admin@example.com',
     status: 'OFFLINE',
+    [Relations]: {},
   },
   {
     username: 'moderator@example.com',
     status: 'OFFLINE',
+    [Relations]: {},
   },
 ]

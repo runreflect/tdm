@@ -129,6 +129,10 @@ function isOpenAPIV3(value: OpenAPI.Document): value is OpenAPIV3.Document | Ope
   return value.hasOwnProperty('components')
 }
 
+/**
+ * Strips invalid characters from an OpenAPI property so that we can generate a property name that
+ * are more user-friendly.
+ */
 function sanitizePropertyName(str: string): string {
   return str.replace(/\@/g, '')
 }

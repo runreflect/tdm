@@ -1,37 +1,31 @@
 import clone from 'lodash/clone'
-import intersection from 'lodash/intersection'
-import isNil from 'lodash/isNil'
-import omit from 'lodash/omit'
-import omitBy from 'lodash/omitBy'
+import isEqual from 'lodash/isEqual'
+import { Mapper, Property } from './mapper'
 
-export interface DiffResults<TEntity extends object, TFixture extends object, TPrimaryKey extends keyof TEntity> {
-  noop: { entity: TEntity, fixture: TFixture, error?: string }[],
-  modify: { entity: TEntity, fixture: TFixture, updatedEntity?: TEntity, error?: string }[],
-  create: { fixture: TFixture, entityToCreate?: Omit<TEntity, TPrimaryKey> | undefined, error?: string }[],
-  delete: { entity: TEntity, error?: string }[],
+export interface DiffResults<T1, TMapper extends Mapper<T1>>{
+  noop: { entity: T1, error?: string }[],
+  modify: { entity: T1, updatedEntity?: TMapper, error?: string }[],
+  create: { entityToCreate?: T1 | undefined, error?: string }[],
+  delete: { entity: T1, error?: string }[],
 }
 
-export class Differ<TEntity extends object, TFixture extends object, TPrimaryKey extends keyof TEntity> {
+export class Differ<T1, TMapper extends Mapper<T1>> {
   diff(options: {
-    existing: TEntity[],
-    candidates: { fixture: TFixture, relations: object }[],
-    primaryKey: TPrimaryKey,
-    isMatchesEntity: (entity: TEntity, fixture: TFixture) => boolean,
-    mapping: (fixture: TFixture, relations?: object) => Omit<TEntity, TPrimaryKey>,
-  }): DiffResults<TEntity, TFixture, TPrimaryKey> { //TODO Add 'isFullDataUpdate'
-    try {
-    const noop: { entity: TEntity, fixture: TFixture }[] = []
-    const toModify: { entity: TEntity, fixture: TFixture, updatedEntity?: TEntity, error?: string }[] = []
-    const toCreate: { fixture: TFixture, entityToCreate?: Omit<TEntity, TPrimaryKey>, error?: string }[] = []
-    const toDelete: { entity: TEntity }[] = []
+    existing: T1[],
+    candidates: any[],
+    mapper: TMapper,
+  }): DiffResults<T1, TMapper> {
+    const noop: { entity: T1 }[] = []
+    const toModify: { entity: T1, updatedEntity?: T1, error?: string }[] = []
+    const toCreate: { entityToCreate?: T1, error?: string }[] = []
+    const toDelete: { entity: T1 }[] = []
 
-    const existingEntities = clone(options.existing)
     const candidates = clone(options.candidates)
 
-    for (let i = 0; i < existingEntities.length; i++) {
-      const existingEntity = existingEntities[i]
-      let haveModifiedEntity: { candidate: TFixture, updatedEntity?: TEntity, error?: string } | undefined
-      let foundEqualCandidate: TFixture | undefined
+    for (let i = 0; i < options.existing.length; i++) {
+      const existingEntity = options.existing[i]
+      let haveModifiedEntity: { candidate: T1, updatedEntity?: T1, error?: string } | undefined
+      let foundEqualCandidate: T1 | undefined
 
       for (let j = 0; j < candidates.length; j++) {
         const candidate = candidates[j]
@@ -40,31 +34,22 @@ export class Differ<TEntity extends object, TFixture extends object, TPrimaryKey
           continue
         }
 
-        if (options.isMatchesEntity(existingEntity, candidate.fixture)) {
-          const existingEntityWithoutPrimaryKey = omit(existingEntity, [options.primaryKey])
-          let candidateMappedToEntity: Omit<TEntity, TPrimaryKey> | undefined
-          let error: string | undefined
+        if (isMatchesEntity(existingEntity, candidate, options.mapper)) {
+          // Find fields that are different between existing value and fixture
+          const differentFields = compare(existingEntity, candidate, options.mapper)
 
-          try {
-            candidateMappedToEntity = options.mapping(candidate.fixture, candidate.relations)
-          } catch (e: any) {
-            console.debug('Error when mapping entity', e)
-            error = e?.message
-          }
-
-          if (!candidateMappedToEntity) {
-            haveModifiedEntity = {
-              candidate: candidate.fixture,
-              error: error ?? 'Unknown error',
-            }
-          } else if (isSharedKeysHaveSameValues(candidateMappedToEntity, existingEntityWithoutPrimaryKey)) {
-            foundEqualCandidate = candidate.fixture
+          if (differentFields.length === 0) {
+            foundEqualCandidate = candidate
           } else {
-            let updatedEntity = candidateMappedToEntity as TEntity
-            updatedEntity[options.primaryKey] = existingEntity[options.primaryKey]
+            let updatedEntity: T1 = clone(existingEntity)
+            
+            differentFields.forEach(field => {
+              //@ts-ignore
+              updatedEntity[field] = candidate[field]
+            })
 
             haveModifiedEntity = {
-              candidate: candidate.fixture,
+              candidate: candidate,
               updatedEntity, // apply existing primary key to updated entity
             } 
           }
@@ -75,54 +60,66 @@ export class Differ<TEntity extends object, TFixture extends object, TPrimaryKey
       }
 
       if (haveModifiedEntity) {
-        toModify.push({ entity: existingEntity, fixture: haveModifiedEntity.candidate, updatedEntity: haveModifiedEntity.updatedEntity, error: haveModifiedEntity.error })
+        toModify.push({ entity: existingEntity, updatedEntity: haveModifiedEntity.updatedEntity, error: haveModifiedEntity.error })
       } else if (foundEqualCandidate) {
-        noop.push({ fixture: foundEqualCandidate, entity: existingEntity })
+        noop.push({ entity: existingEntity })
       } else {
         toDelete.push({ entity: existingEntity })
       }
     }
 
     candidates.filter(obj => obj != undefined).forEach(candidate => {
-      let entityToCreate: Omit<TEntity, TPrimaryKey> | undefined
-      
-      try {
-        entityToCreate = options.mapping(candidate.fixture, candidate.relations)
-        toCreate.push({ fixture: candidate.fixture, entityToCreate })
-      } catch (e: any) {
-        console.debug('Error when mapping entity', e)
-        toCreate.push({ fixture: candidate.fixture, error: e?.message ?? 'Unknown error' })
-      }
+      toCreate.push({ entityToCreate: candidate })
     })
 
     return {
       noop: noop,
+      //@ts-ignore
       modify: toModify,
       create: toCreate,
       delete: toDelete,
     }
-  } catch (e) {
-    console.error("Differ error", e)
-    throw e
-  }
   }
 }
 
-function isSharedKeysHaveSameValues(obj1: object, obj2: object): boolean {
-  //TODO do deep comparsion instead of only comparing first level of properties
-
-  // Get properties that are shared across both objects and have defined values in both objects
-  const commonProperties = intersection(
-    Object.keys(omitBy(obj1, isNil)),
-    Object.keys(omitBy(obj2, isNil))
-  )
-
-  for (const property of commonProperties) {
+function isMatchesEntity<
+  T1,
+  TMapper extends Mapper<T1>
+>(existingEntity: T1, candidate: T1, mapper: TMapper): boolean {
+  const fields = Object.entries(mapper.fields).
+    filter(([_, value]) => value === Property.Comparator).
+    map(([key, _]) => key)
+  
+  for (const field of fields) {
     //@ts-ignore
-    if (obj1[property] !== obj2[property]) { // @ts-ignore
+    if (existingEntity[field] !== candidate[field]) {
       return false
     }
   }
 
   return true
+}
+
+function compare<
+  T1,
+  TMapper extends Mapper<T1>
+>(existingEntity: T1, candidate: T1, mapper: TMapper): (keyof T1)[] {
+  const differentFields: (keyof T1)[] = []
+
+  const fields = Object.entries(mapper.fields).
+    filter(([_, value]) => value === Property.Field).
+    map(([key, _]) => key)
+  
+  for (const field of fields) {
+    //@ts-ignore
+    if (existingEntity[field] == undefined && candidate[field] == undefined) {
+      //NO-OP - Both entity and fixture have  null/undefined for this field, so we'll ignore it
+    //@ts-ignore
+    } else if (!isEqual(existingEntity[field], candidate[field])) {
+      //@ts-ignore
+      differentFields.push(field)
+    }
+  }
+
+  return differentFields
 }

@@ -2,13 +2,13 @@ import { TDM } from "tdm/tdm"
 import { channels } from "./fixtures/channels"
 import { messages } from "./fixtures/messages"
 import { users } from "./fixtures/users"
-import { SupabaseApi } from "./transformers/api"
-import { ChannelExecutor } from "./transformers/channels/channel-executor"
-import { ChannelTransformer } from "./transformers/channels/channel-transformer"
-import { MessageExecutor } from "./transformers/messages/message-executor"
-import { MessageTransformer } from "./transformers/messages/message-transformer"
-import { UserExecutor } from "./transformers/users/user-executor"
-import { UserTransformer } from "./transformers/users/user-transformer"
+import { SupabaseApi } from "./mappers/api"
+import { ChannelExecutor } from "./mappers/channels/channel-executor"
+import { ChannelMapper } from "./mappers/channels/channel-mapper"
+import { MessageExecutor } from "./mappers/messages/message-executor"
+import { MessageMapper } from "./mappers/messages/message-mapper"
+import { UserExecutor } from "./mappers/users/user-executor"
+import { UserMapper } from "./mappers/users/user-mapper"
 
 async function main(appName: string, apiKey: string, dryRun: boolean) {
   const tdm = new TDM()
@@ -17,9 +17,9 @@ async function main(appName: string, apiKey: string, dryRun: boolean) {
 
   console.log(`Running job with dryRun: ${dryRun}`)
 
-  tdm.add('user', new UserTransformer(users), new UserExecutor(supabaseApi))
-  tdm.add('channel', new ChannelTransformer(channels), new ChannelExecutor(supabaseApi))
-  tdm.add('message', new MessageTransformer(messages), new MessageExecutor(supabaseApi))
+  tdm.add(users, new UserMapper(), new UserExecutor(supabaseApi))
+  tdm.add(channels, new ChannelMapper(), new ChannelExecutor(supabaseApi))
+  tdm.add(messages, new MessageMapper(), new MessageExecutor(supabaseApi))
 
   await tdm.run({ dryRun })
 }

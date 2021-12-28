@@ -15,7 +15,8 @@
         "jest": "^27.2.4",
         "lodash": "^4.17.21",
         "reflect-metadata": "^0.1.13",
-        "swagger-parser": "^10.0.3"
+        "swagger-parser": "^10.0.3",
+        "utility-types": "^3.10.0"
     },
     "devDependencies": {
         "@types/cli-progress": "^3.9.2",

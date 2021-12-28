@@ -1,7 +1,6 @@
-export abstract class Executor<TModel> {
-  abstract create(model: TModel): void
-  abstract readCollection(): Promise<TModel[]>
-  abstract read(model: TModel): void
-  abstract update(model: TModel): void
-  abstract delete(model: TModel): void
+export abstract class Executor<T> {
+  abstract create(model: T): void
+  abstract readAll(): Promise<T[]>
+  abstract update(model: T): void
+  abstract delete(model: T): void
 }

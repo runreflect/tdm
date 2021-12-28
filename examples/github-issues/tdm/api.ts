@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { Octokit } from 'octokit'
-import { AbridgedIssue } from '../fixtures/base'
+import { Issue } from './schemas/issue'
 
 const deleteMutation = `mutation ($issueId: ID!) { 
   deleteIssue(input: {issueId: $issueId}) {
@@ -25,22 +25,22 @@ export class GithubApi {
     }
   }
 
-  async getIssues(owner: string, repo: string): Promise<AbridgedIssue[]> {
+  async getIssues(owner: string, repo: string): Promise<Issue[]> {
     const response = await axios.get(`${this.baseUrl}/repos/${owner}/${repo}/issues`, { headers: this.headers })
     return response.data
   }
 
-  async createIssue(owner: string, repo: string, issue: Omit<AbridgedIssue, 'id'>): Promise<unknown> {
+  async createIssue(owner: string, repo: string, issue: Omit<Issue, 'id'>): Promise<unknown> {
     const response = await axios.post(`${this.baseUrl}/repos/${owner}/${repo}/issues`, issue, { headers: this.headers })
     return response.data
   }
   
-  async updateIssue(owner: string, repo: string, issue: AbridgedIssue): Promise<unknown> {
+  async updateIssue(owner: string, repo: string, issue: Issue): Promise<unknown> {
     const response = await axios.patch(`${this.baseUrl}/repos/${owner}/${repo}/issues/${issue.number}`, issue, { headers: this.headers })
     return response.data
   }
 
-  async deleteIssue(nodeId: number): Promise<unknown> {
+  async zdeleteIssue(nodeId: number): Promise<unknown> {
     return this.octokit.graphql(deleteMutation, { issueId: nodeId })
   }
 }
