@@ -7,16 +7,39 @@
 Installation
 
 ```
-npm install
+npm install test-data-management
 ```
 
-Build the project
+Using tdm in your project
 
 ```
-npm run build
+import { TDM } from "tdm/tdm"
+
+// Define these yourself
+import { users } from "./fixtures/users"
+import { UserMapper } from "./users-mapper"
+import { UserExecutor } from "./users-executor"
+
+async function main(dryRun: boolean) {
+  const tdm = new TDM()
+
+  tdm.add(issues, new UserMapper(), new UserExecutor())
+
+  await tdm.run({ dryRun })
+}
+
+const args = process.argv.slice(2)
+const dryRun = args[0] === 'false' ? false : true
+
+main(dryRun)
 ```
 
-See the [examples](examples/) directory for some example projects using TDM.
+When running TDM in dry-run mode (which is the default), you'll see what changes TDM would apply to get your test data into the expected state. Here's an
+example of what that looks like from our Github Issues example:
+
+![Example output from TDM in dry-run mode](https://github.com/runreflect/tdm/blob/main/docs/screenshot.jpg?raw=true)
+
+See the [examples](examples/) directory for some examples that you can run yourself.
 
 ## Overview
 
