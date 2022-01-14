@@ -1,0 +1,40 @@
+openapi: 3.0.0
+info:
+  title: Sample API
+  version: 1.0.0
+paths:
+  /example:
+    get:
+      summary: Example
+      responses:
+          '200':
+            description: OK
+components:
+  schemas:
+    Foo:
+      properties:
+        a:
+          type: string
+    Bar:
+      properties:
+        b:
+          type: number
+    Union:
+      properties:
+        c:
+          allOf:
+            - $ref: '#/components/schemas/Foo'
+            - $ref: '#/components/schemas/Bar'
+    Baz:
+      allOf:
+        - $ref: '#/components/schemas/PaginationOptions'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Bar'
+    PaginationOptions:
+      properties:
+        cursor:
+          type: string
