@@ -5,7 +5,7 @@ import { Issue } from "../schemas/issue";
 export const issues: Fixture<IssueMapper, Issue>[] = [
   {
     title: 'First Issue',
-    body: 'Description for the first issue with modification',
+    body: 'Description for the first issue',
     state: 'open',
     labels: [],
     [Relations]: {},
