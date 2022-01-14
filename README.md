@@ -37,7 +37,7 @@ main(dryRun)
 When running TDM in dry-run mode (which is the default), you'll see what changes TDM would apply to get your test data into the expected state. Here's an
 example of what that looks like from our Github Issues example:
 
-![Example output from TDM in dry-run mode](https://github.com/runreflect/tdm/blob/main/docs/screenshot.jpg?raw=true)
+![Example output from TDM in dry-run mode](https://raw.githubusercontent.com/runreflect/tdm/main/docs/screenshot.png)
 
 See the [examples](examples/) directory for some examples that you can run yourself.
 
