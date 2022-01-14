@@ -1,6 +1,6 @@
 {
     "name": "tdm",
-    "version": "0.0.1",
+    "version": "0.1.0",
     "description": "tdm (short for Test Data Management) is an open-source library to help you manage your test data. You can think of it as a Terraform for Test Data.",
     "scripts": {
         "build": "tsc --project tsconfig.json",
