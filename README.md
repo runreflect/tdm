@@ -12,8 +12,8 @@ npm install test-data-management
 
 Using tdm in your project
 
-```
-import { TDM } from "tdm/tdm"
+```ts
+import { TDM } from "test-data-management"
 
 // Define these yourself
 import { users } from "./fixtures/users"

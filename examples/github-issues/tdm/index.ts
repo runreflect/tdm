@@ -1,4 +1,4 @@
-import { TDM } from "tdm/tdm"
+import { TDM } from "test-data-management
 import { issues } from "./fixtures/issue"
 import { IssueMapper } from "./issues/issue-mapper"
 import { IssueExecutor } from "./issues/issue-executor"

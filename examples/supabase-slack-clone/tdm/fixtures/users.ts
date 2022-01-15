@@ -1,4 +1,4 @@
-import { Fixture, Relations } from 'tdm/fixture'
+import { Fixture, Relations } from 'test-data-management'
 import { UserMapper } from '../mappers/users/user-mapper'
 import { User } from '../schemas/user'
 

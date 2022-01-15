@@ -1,4 +1,4 @@
-import { Executor } from 'tdm/executor'
+import { Executor } from 'test-data-management'
 import { SupabaseApi } from "../api";
 import { Channel } from "../../schemas/channel";
 

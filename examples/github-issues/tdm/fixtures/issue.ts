@@ -1,4 +1,4 @@
-import { Fixture, Relations } from "tdm/fixture";
+import { Fixture, Relations } from "test-data-management";
 import { IssueMapper } from "../issues/issue-mapper";
 import { Issue } from "../schemas/issue";
 

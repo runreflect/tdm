@@ -1,5 +1,5 @@
 import { User } from "../../schemas/user";
-import { Mapper, Property } from "tdm/mapper";
+import { Mapper, Property } from "test-data-management";
 
 export class UserMapper extends Mapper<User> {
   fields = {

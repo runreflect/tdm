@@ -1,5 +1,5 @@
 import { Message } from "../../schemas/message";
-import { Executor } from 'tdm/executor'
+import { Executor } from 'test-data-management'
 import { SupabaseApi } from "../api";
 
 export class MessageExecutor extends Executor<Message> {

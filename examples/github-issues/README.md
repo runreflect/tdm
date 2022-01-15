@@ -10,23 +10,19 @@ permanently delete all existing Github issues in your repository!**
 ### Installation
 
 ```
-npm run tdm-build
+npm run build
 ```
 
 ### Running tdm
 
-Auto-generate bindings to the Github API
+Auto-generate bindings to the Github API and output to /schemas directory:
 
-_(From the root /tdm directory):_
 ```
-node dist/index.js generate openapi https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json examples/github-issues/schemas
+npx test-data-management generate openapi https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json schemas
 ```
 
-Run TDM in dry-run mode to see what changes will be applied
+Run TDM in dry-run mode to see what changes will be applied:
 
-_(From this directory):_
 ```
 node dist/index <github-api-key> <repo-organization> <repo-name> true
 ```
-
-Substitute the last argument for `false` to apply the changes.

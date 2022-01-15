@@ -1,4 +1,4 @@
-import { Fixture, Relations } from 'tdm/fixture'
+import { Fixture, Relations } from 'test-data-management'
 import { ChannelMapper } from '../mappers/channels/channel-mapper'
 import { Channel } from '../schemas/channel'
 
