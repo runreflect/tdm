@@ -1,5 +1,5 @@
 import { Issue } from "../schemas/issue"
-import { Mapper, Property } from "tdm/mapper"
+import { Mapper, Property } from "test-data-management"
 
 export class IssueMapper extends Mapper<Issue> {
   fields = {

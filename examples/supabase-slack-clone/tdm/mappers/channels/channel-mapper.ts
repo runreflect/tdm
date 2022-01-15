@@ -1,5 +1,5 @@
 import { Channel } from "../../schemas/channel";
-import { Mapper, Property } from "tdm/mapper";
+import { Mapper, Property } from "test-data-management";
 import { UserMapper } from "../users/user-mapper";
 
 export class ChannelMapper extends Mapper<Channel> {

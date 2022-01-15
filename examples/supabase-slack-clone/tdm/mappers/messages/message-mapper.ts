@@ -1,5 +1,5 @@
 import { Message } from "../../schemas/message";
-import { Mapper, Property } from "tdm/mapper";
+import { Mapper, Property } from "test-data-management";
 import { UserMapper } from "../users/user-mapper";
 import { ChannelMapper } from "../channels/channel-mapper";
 

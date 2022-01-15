@@ -17,7 +17,7 @@
     "react-dom": "^16.7.0",
     "sass": "^1.26.2",
     "tailwindcss": "^1.1.4",
-    "tdm": "file:../../dist"
+    "test-data-management": "file:../.."
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^8.5.6",

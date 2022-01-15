@@ -1,4 +1,4 @@
-import { TDM } from "tdm/tdm"
+import { TDM } from "test-data-management"
 import { channels } from "./fixtures/channels"
 import { messages } from "./fixtures/messages"
 import { users } from "./fixtures/users"

@@ -1,4 +1,4 @@
-import { Executor } from "../../../../dist/executor"
+import { Executor } from "test-data-management"
 import { GithubApi } from "../api"
 import { Issue } from "../schemas/issue"
 
