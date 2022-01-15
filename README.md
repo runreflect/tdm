@@ -248,5 +248,5 @@ Since we need to know how to create/read/update/delete each type of Fixture, eac
 Entities can be generated from OpenAPI 3.x specifications by using the following command:
 
 ```
-node dist/index.js generate <source-type> <source-url> <destination-folder>
+npx test-data-management generate openapi <openapi-definition-url> <destination-folder>
 ```
