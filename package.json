@@ -3,7 +3,7 @@
     "version": "0.1.0",
     "description": "tdm (short for Test Data Management) is an open-source library to help you manage your test data. You can think of it as a Terraform for Test Data.",
     "scripts": {
-        "build": "tsc --project tsconfig.json",
+        "build": "tsc --build --clean && tsc --project tsconfig.json",
         "test": "jest"
     },
     "license": "MIT",
@@ -24,6 +24,10 @@
         "testing"
     ],
     "homepage": "https://github.com/runreflect/tdm#readme",
+    "bin": "dist/run.js",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "files": ["dist"],
     "dependencies": {
         "cli-progress": "^3.9.1",
         "colors": "^1.4.0",
