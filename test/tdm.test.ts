@@ -194,3 +194,129 @@ test('should populate error property if relation cannot be resolved', async () =
     },
   })
 })
+
+interface First {
+  id: number,
+  title: string,
+}
+
+interface Second {
+  id: number,
+  name: string,
+}
+
+interface Combined {
+  firstId: number,
+  secondId: number,
+}
+
+class FirstMapper extends Mapper<First> {
+  fields = {
+    id: Property.Identifier,
+    title: Property.Comparator,
+  } as const
+}
+
+class SecondMapper extends Mapper<Second> {
+  fields = {
+    id: Property.Identifier,
+    name: Property.Comparator,
+  } as const
+}
+
+class CombinedMapper extends Mapper<Combined> {
+  fields = {
+    firstId: {
+      mapper: new FirstMapper(),
+      field: 'id',
+    },
+    secondId: {
+      mapper: new SecondMapper(),
+      field: 'id',
+    },
+  } as const
+}
+
+class FirstExecutor extends Executor<First> {
+  async create(obj: First) {}
+  async readAll(): Promise<First[]> {
+    return Promise.resolve([{ id: 1000, title: 'Foo' }])
+  }
+  async update(obj: First) {}
+  async delete(objOrId: First | string) {}
+}
+
+class SecondExecutor extends Executor<Second> {
+  async create(obj: Second) {}
+  async readAll(): Promise<Second[]> {
+    return Promise.resolve([{ id: 10000, name: 'Bar' }])
+  }
+  async update(obj: Second) {}
+  async delete(objOrId: Second | string) {}
+}
+
+class CombinedExecutor extends Executor<Combined> {
+  async create(obj: Combined) {}
+  async readAll(): Promise<Combined[]> {
+    return Promise.resolve([])
+  }
+  async update(obj: Combined) {}
+  async delete(objOrId: Combined | string) {}
+}
+
+test('should resolve relations for fixture that contains only relations', async () => {
+  const tdm = new TDM()
+
+  const firstFixtures: Fixture<FirstMapper, First>[] = [
+    { title: 'Foo', [Relations]: {} },
+  ]
+
+  const secondFixtures: Fixture<SecondMapper, Second>[] = [
+    { name: 'Bar', [Relations]: {} },
+  ]
+
+  const combinedFixtures: Fixture<CombinedMapper, Combined>[] = [
+    {
+      [Relations]: {
+        firstId: { title: 'Foo' },
+        secondId: { name: 'Bar' },
+      },
+    },
+  ]
+
+  tdm.add(firstFixtures, new FirstMapper(), new FirstExecutor())
+  tdm.add(secondFixtures, new SecondMapper(), new SecondExecutor())
+  tdm.add(combinedFixtures, new CombinedMapper(), new CombinedExecutor())
+
+  const results = await tdm.run({ dryRun: true })
+
+  expect(results).toEqual({
+    FirstMapper: {
+      create: [],
+      modify: [],
+      noop: [{
+        entity: { id: 1000, title: 'Foo' },
+      }],
+      delete: [],
+    },
+    SecondMapper: {
+      create: [],
+      modify: [],
+      noop: [{
+        entity: { id: 10000, name: 'Bar' },
+      }],
+      delete: [],
+    },
+    CombinedMapper: {
+      create: [{
+        entityToCreate: {
+          firstId: 1000,
+          secondId: 10000,
+        },
+      }],
+      modify: [],
+      noop: [],
+      delete: [],
+    },
+  })
+})
