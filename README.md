@@ -103,7 +103,7 @@ export class UserMapper extends Mapper<User> {
 The Mapper defines each property in the Entity, assigning it one of the following property types:
 - *Identifier:* A property that represents the "primary key" of the entity. A good way to determine the identifier is to see which field is used to reference a resource in the collection in other related API endpoints. So for example, if another API endpoint `GET /users/:id` uses the `id` field to reference a single user within the list of users, then `id` is your identifier.
 - *Comparator:* This is the property you'll use to determine uniqueness in your fixtures. In the example above, we've specified `email` as a comparator since it uniquely identifies a user in the collection of users. In cases where a field should be both identifier AND comparator, give it the value `Property.Comparator`.
-- *Field:*: A property that is not an identifier or comparator, but is defined in the fixtures.
+- *Field:* A property that is not an identifier or comparator, but is defined in the fixtures.
 - *Ignored:* A property that is not defined in the fixtures.
 
 With our Mapper defined, we can now write our fixtures:
