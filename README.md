@@ -1,6 +1,6 @@
 # tdm - *Terraform* for Test Data
 
-*tdm* (short for Test Data Management) is an open-source library to help you manage your test data. You can think of it as a *Terraform for Test Data*: You define the state your test data should be in, and TDM interfaces with your data stores (e.g. your own APIs and/or third-party APIs) to get things into that desired state.
+*tdm* (short for Test Data Management) is an open-source library maintained by [Reflect](https://reflect.run) to help you manage your test data. You can think of it as a *Terraform for Test Data*: You define the state your test data should be in, and TDM interfaces with your data stores (e.g. your own APIs and/or third-party APIs) to get things into that desired state.
 
 ## Usage
 
